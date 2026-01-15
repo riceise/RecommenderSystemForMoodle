@@ -1,0 +1,15 @@
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\bin\Debug\net8.0\RecommenderSystem.PythonBridge.deps.json
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\bin\Debug\net8.0\RecommenderSystem.PythonBridge.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\bin\Debug\net8.0\RecommenderSystem.PythonBridge.pdb
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\bin\Debug\net8.0\RecommenderSystem.Core.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\bin\Debug\net8.0\RecommenderSystem.Core.pdb
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\obj\Debug\net8.0\RecommenderSystem.PythonBridge.csproj.AssemblyReference.cache
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\obj\Debug\net8.0\RecommenderSystem.PythonBridge.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\obj\Debug\net8.0\RecommenderSystem.PythonBridge.AssemblyInfoInputs.cache
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\obj\Debug\net8.0\RecommenderSystem.PythonBridge.AssemblyInfo.cs
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\obj\Debug\net8.0\RecommenderSystem.PythonBridge.csproj.CoreCompileInputs.cache
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\obj\Debug\net8.0\Recommen.1A9C046F.Up2Date
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\obj\Debug\net8.0\RecommenderSystem.PythonBridge.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\obj\Debug\net8.0\refint\RecommenderSystem.PythonBridge.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\obj\Debug\net8.0\RecommenderSystem.PythonBridge.pdb
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\obj\Debug\net8.0\ref\RecommenderSystem.PythonBridge.dll

@@ -1,0 +1,18 @@
+# Core web framework
+Flask==3.0.3
+python-dotenv>=1.0.0
+requests==2.32.0
+
+# ML / Recommender system
+lightfm @ git+https://github.com/lyst/lightfm.git@master 
+scikit-learn
+scipy
+pandas
+numpy
+
+# AI integrations
+groq==0.4.0
+sentence-transformers==2.7.0
+
+psycopg2-binary
+SQLAlchemy==2.0.25

@@ -1,0 +1,12 @@
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\bin\Debug\net8.0\RecommenderSystem.Core.deps.json
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\bin\Debug\net8.0\RecommenderSystem.Core.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\bin\Debug\net8.0\RecommenderSystem.Core.pdb
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\obj\Debug\net8.0\RecommenderSystem.Core.csproj.AssemblyReference.cache
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\obj\Debug\net8.0\RecommenderSystem.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\obj\Debug\net8.0\RecommenderSystem.Core.AssemblyInfoInputs.cache
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\obj\Debug\net8.0\RecommenderSystem.Core.AssemblyInfo.cs
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\obj\Debug\net8.0\RecommenderSystem.Core.csproj.CoreCompileInputs.cache
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\obj\Debug\net8.0\RecommenderSystem.Core.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\obj\Debug\net8.0\refint\RecommenderSystem.Core.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\obj\Debug\net8.0\RecommenderSystem.Core.pdb
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\obj\Debug\net8.0\ref\RecommenderSystem.Core.dll

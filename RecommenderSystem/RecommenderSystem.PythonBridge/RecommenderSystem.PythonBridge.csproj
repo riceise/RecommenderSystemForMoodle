@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+    
+    
+  <ItemGroup>
+      <!-- Добавляем ссылку на Core, чтобы видеть DTO и Интерфейсы -->
+      <ProjectReference Include="..\RecommenderSystem.Core\RecommenderSystem.Core.csproj" />
+  </ItemGroup>
+    
+    
+  <ItemGroup>
+    <PackageReference Include="System.Net.Http.Json" Version="8.0.1" />
+  </ItemGroup>
+</Project>

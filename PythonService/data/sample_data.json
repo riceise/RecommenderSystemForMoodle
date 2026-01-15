@@ -1,0 +1,11 @@
+{
+    "user_id": 123,
+    "moodle_data": {
+      "completed_courses": [
+        {"id": 1, "title": "Python Basics", "grade": 85, "progress": 100},
+        {"id": 2, "title": "Web Dev", "grade": 60, "progress": 80}
+      ],
+      "weak_topics": ["алгоритмы", "ООП", "асинхронность"],
+      "attempts": {"quiz_5": 3, "lab_3": 2}
+    }
+  }
