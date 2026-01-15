@@ -6,7 +6,6 @@ public class MoodleCourseDto
     public string Fullname { get; set; } = string.Empty; 
     public string Shortname { get; set; } = string.Empty; 
     public string Summary { get; set; } = string.Empty;  
-    
     public List<MoodleTagDto> Tags { get; set; } = new(); 
 
 }

@@ -13,3 +13,4 @@ C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSyst
 C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\obj\Debug\net8.0\refint\RecommenderSystem.PythonBridge.dll
 C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\obj\Debug\net8.0\RecommenderSystem.PythonBridge.pdb
 C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\obj\Debug\net8.0\ref\RecommenderSystem.PythonBridge.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.PythonBridge\obj\Debug\net8.0\RecommenderSystem.PythonBridge.sourcelink.json

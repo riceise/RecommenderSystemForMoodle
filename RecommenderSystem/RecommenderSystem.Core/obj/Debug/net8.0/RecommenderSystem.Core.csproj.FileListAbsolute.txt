@@ -10,3 +10,4 @@ C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSyst
 C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\obj\Debug\net8.0\refint\RecommenderSystem.Core.dll
 C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\obj\Debug\net8.0\RecommenderSystem.Core.pdb
 C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\obj\Debug\net8.0\ref\RecommenderSystem.Core.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Core\obj\Debug\net8.0\RecommenderSystem.Core.sourcelink.json

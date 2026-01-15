@@ -17,3 +17,4 @@ C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSyst
 C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Infrastructure\obj\Debug\net8.0\ref\RecommenderSystem.Infrastructure.dll
 C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Infrastructure\bin\Debug\net8.0\RecommenderSystem.Infrastructure.runtimeconfig.json
 C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Infrastructure\obj\Debug\net8.0\RecommenderSystem.Infrastructure.genruntimeconfig.cache
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Infrastructure\obj\Debug\net8.0\RecommenderSystem.Infrastructure.sourcelink.json
