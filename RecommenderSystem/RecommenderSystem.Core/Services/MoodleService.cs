@@ -181,14 +181,13 @@ public class MoodleService : IMoodleService
             var userGradeData = response.UserGrades.First();
 
             return userGradeData.GradeItems
-                .Where(item => item.ItemType == "mod")
                 .Select(item => new UserGradeDto
                 {
-                    ItemName = item.ItemName,
-                    ModuleType = item.ItemModule,
+                    ItemName = item.ItemName ?? "Итоговая оценка", 
+                    ItemModule = item.ItemModule,
+                    ItemType = item.ItemType, 
                     RawGrade = item.GradeRaw,
-                    MaxGrade = item.GradeMax,
-                    CourseTags = new List<string>()
+                    MaxGrade = item.GradeMax
                 })
                 .ToList();
         }
@@ -225,6 +224,41 @@ public class MoodleService : IMoodleService
         }
 
         return null;
+    }
+    
+    public async Task<List<MoodleUserDto>> GetEnrolledUsersAsync(int courseId)
+    {
+        var queryParams = $"?wstoken={_token}" +
+                          $"&wsfunction=core_enrol_get_enrolled_users" +
+                          $"&moodlewsrestformat=json" +
+                          $"&courseid={courseId}";
+
+        try 
+        {
+            var jsonResponse = await _httpClient.GetStringAsync(queryParams);
+            
+            // Если Moodle вернул ошибку
+            if (jsonResponse.Contains("\"exception\"")) 
+            {
+                Console.WriteLine($"[Error getting users]: {jsonResponse}");
+                return new List<MoodleUserDto>();
+            }
+
+            var users = JsonSerializer.Deserialize<List<MoodleEnrolledUserDto>>(jsonResponse);
+
+            return users?.Select(u => new MoodleUserDto 
+            {
+                Id = u.Id,
+                Username = u.Username,
+                Fullname = u.Fullname,
+                Email = u.Email
+            }).ToList() ?? new List<MoodleUserDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Error]: {ex.Message}");
+            return new List<MoodleUserDto>();
+        }
     }
 
     // ==========================================
@@ -323,5 +357,14 @@ public class MoodleService : IMoodleService
         [JsonPropertyName("email")]
         public string Email { get; set; } = string.Empty;
     }
+    private class MoodleEnrolledUserDto
+    {
+        [JsonPropertyName("id")] public int Id { get; set; }
+        [JsonPropertyName("username")] public string Username { get; set; } = string.Empty;
+        [JsonPropertyName("fullname")] public string Fullname { get; set; } = string.Empty;
+        [JsonPropertyName("email")] public string Email { get; set; } = string.Empty;
+    }
     #endregion
+    
+    
 }

@@ -2,6 +2,7 @@ using RecommenderSystem.Core.Interfaces;
 using RecommenderSystem.Infrastructure.Services;
 using RecommenderSystem.PythonBridge;
 using Microsoft.EntityFrameworkCore;
+using RecommenderSystem.Infrastructure.Interfaces;
 using RecommenderSystem.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,13 +11,13 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// --- 1. Регистрация сервисов ---
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddHttpClient<IPythonAiService, PythonAiService>();
 
-// Настраиваем CORS (чтобы Vue мог слать запросы)
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("VuePolicy", policy =>
@@ -27,10 +28,8 @@ builder.Services.AddCors(options =>
     });
 });
 
-// --- 2. Регистрация сервисов (Infrastructure & PythonBridge) ---
 builder.Services.AddHttpClient<IMoodleService, MoodleService>();
 
-// Регистрируем PythonRecommenderService и HttpClient для него
 builder.Services.AddHttpClient<IRecommendationService, PythonRecommenderService>(client =>
 {
     var pythonUrl = builder.Configuration["PythonService:Url"];
@@ -39,7 +38,6 @@ builder.Services.AddHttpClient<IRecommendationService, PythonRecommenderService>
 
 var app = builder.Build();
 
-// --- 3. Pipeline ---
 
 if (app.Environment.IsDevelopment())
 {

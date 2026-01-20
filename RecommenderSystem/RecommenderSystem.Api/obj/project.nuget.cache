@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "xPRVNev+4CQ=",
+  "dgSpecHash": "5KwfB4hd9YI=",
   "success": true,
-  "projectFilePath": "C:\\Users\\Murad\\RiderProjects\\RecommenderSystem\\RecommenderSystem\\RecommenderSystem.api\\RecommenderSystem.Api.csproj",
+  "projectFilePath": "C:\\Users\\Murad\\RiderProjects\\RecommenderSystem\\RecommenderSystem\\RecommenderSystem.Api\\RecommenderSystem.Api.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Murad\\.nuget\\packages\\humanizer.core\\2.14.1\\humanizer.core.2.14.1.nupkg.sha512",
     "C:\\Users\\Murad\\.nuget\\packages\\microsoft.aspnetcore.openapi\\8.0.22\\microsoft.aspnetcore.openapi.8.0.22.nupkg.sha512",

@@ -27,6 +27,7 @@ ENV/
 env/
 .venv/
 .env/
+PythonService/.env
 
 # PyTorch / TensorFlow large files (just in case)
 *.h5

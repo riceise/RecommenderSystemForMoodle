@@ -35,6 +35,10 @@ namespace RecommenderSystem.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<int>("MoodleUserId")
                         .HasColumnType("integer");
 
@@ -86,6 +90,67 @@ namespace RecommenderSystem.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Courses");
+                });
+
+            modelBuilder.Entity("RecommenderSystem.Core.Entities.UserCourse", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("CourseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<double?>("Grade")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("LastSynced")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double?>("MaxGrade")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserCourses");
+                });
+
+            modelBuilder.Entity("RecommenderSystem.Core.Entities.UserCourse", b =>
+                {
+                    b.HasOne("RecommenderSystem.Core.Entities.Course", "Course")
+                        .WithMany("UserCourses")
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RecommenderSystem.Core.Entities.AppUser", "User")
+                        .WithMany("UserCourses")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Course");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("RecommenderSystem.Core.Entities.AppUser", b =>
+                {
+                    b.Navigation("UserCourses");
+                });
+
+            modelBuilder.Entity("RecommenderSystem.Core.Entities.Course", b =>
+                {
+                    b.Navigation("UserCourses");
                 });
 #pragma warning restore 612, 618
         }

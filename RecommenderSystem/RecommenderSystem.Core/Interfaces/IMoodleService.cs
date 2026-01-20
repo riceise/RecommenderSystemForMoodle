@@ -18,5 +18,8 @@ public interface IMoodleService
     
     // Берет все курсы 
     Task<List<MoodleCourseDto>> GetAllCoursesAsync();
+    
+    Task<List<MoodleUserDto>> GetEnrolledUsersAsync(int courseId);
+
 
 }

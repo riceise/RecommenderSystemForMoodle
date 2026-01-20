@@ -2,9 +2,9 @@
 
 public class UserGradeDto
 {
-    public string ItemName { get; set; } = string.Empty; 
-    public string ModuleType { get; set; } = string.Empty; 
-    public double? RawGrade { get; set; }
-    public double? MaxGrade { get; set; }
-    public List<string> CourseTags { get; set; } = new(); 
+    public string ItemName { get; set; } = string.Empty;
+    public string ItemModule { get; set; } = string.Empty; 
+    public string ItemType { get; set; } = string.Empty;   
+    public double? RawGrade { get; set; } // Сама оценка
+    public double? MaxGrade { get; set; } // Максимум
 }
