@@ -8,35 +8,46 @@ public class PythonRecommenderService : IRecommendationService
 {
     private readonly HttpClient _httpClient;
 
-    // HttpClient будет создан автоматически и настроен в Program.cs
     public PythonRecommenderService(HttpClient httpClient)
     {
         _httpClient = httpClient;
     }
 
-    public async Task<List<RecommendationResultDto>> GetRecommendationsAsync(int userId, List<UserGradeDto> grades)
+    public async Task<List<RecommendationResultDto>> GetRecommendationsAsync(int userId, List<UserGradeDto> grades, List<string> contextTags)
     {
-        // 1. Формируем запрос, который ждет Python (смотри свой main.py)
+       
+        var pythonGrades = grades.Select(g => new
+        {
+            ItemName = g.ItemName,
+            RawGrade = g.RawGrade ?? 0,
+            MaxGrade = g.MaxGrade ?? 100,
+            CourseTags = contextTags 
+        }).ToList();
+
         var payload = new
         {
             userId = userId,
-            moodleGrades = grades
+            moodleGrades = pythonGrades
         };
 
-        // 2. Отправляем POST запрос на localhost:5001/recommend
+        
         var response = await _httpClient.PostAsJsonAsync("/recommend", payload);
-
-        // 3. Если ошибка - выбрасываем исключение
+        
         response.EnsureSuccessStatusCode();
 
-        // 4. Читаем ответ
-        var result = await response.Content.ReadFromJsonAsync<PythonResponseWrapper>();
         
-        return result?.Recommendations ?? new List<RecommendationResultDto>();
+        try 
+        {
+            var result = await response.Content.ReadFromJsonAsync<List<RecommendationResultDto>>();
+            return result ?? new List<RecommendationResultDto>();
+        }
+        catch
+        {
+            var wrapper = await response.Content.ReadFromJsonAsync<PythonResponseWrapper>();
+            return wrapper?.Recommendations ?? new List<RecommendationResultDto>();
+        }
     }
 
-    // Вспомогательный класс для парсинга JSON ответа от Python
-    // (Потому что Python возвращает { "userId": 1, "recommendations": [...] })
     private class PythonResponseWrapper
     {
         public int UserId { get; set; }

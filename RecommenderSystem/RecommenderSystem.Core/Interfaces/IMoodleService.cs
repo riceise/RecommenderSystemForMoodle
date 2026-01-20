@@ -20,6 +20,7 @@ public interface IMoodleService
     Task<List<MoodleCourseDto>> GetAllCoursesAsync();
     
     Task<List<MoodleUserDto>> GetEnrolledUsersAsync(int courseId);
-
+    
+    Task<List<string>> GetTopicsWithActivitiesAsync(int courseId);
 
 }

@@ -260,11 +260,50 @@ public class MoodleService : IMoodleService
             return new List<MoodleUserDto>();
         }
     }
+    /// <summary>
+    /// Возвращает список секций, в которых есть тесты или задания
+    /// </summary>
+    public async Task<List<string>> GetTopicsWithActivitiesAsync(int courseId)
+    {
+        var queryParams = $"?wstoken={_token}" +
+                          $"&wsfunction=core_course_get_contents" +
+                          $"&moodlewsrestformat=json" +
+                          $"&courseid={courseId}";
 
-    // ==========================================
-    // Внутренние классы для десериализации JSON
-    // ==========================================
+        try
+        {
+            var jsonString = await _httpClient.GetStringAsync(queryParams);
 
+            if (jsonString.Contains("\"exception\""))
+            {
+                Console.WriteLine($"[Content Error]: {jsonString}");
+                return new List<string>();
+            }
+
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var sections = JsonSerializer.Deserialize<List<MoodleSection>>(jsonString, options);
+
+            if (sections == null) return new List<string>();
+
+            var activeTopics = sections
+                .Where(section => section.Modules.Any(mod => 
+                    mod.ModName == "quiz" || 
+                    mod.ModName == "assign")) 
+                .Select(section => section.Name)
+                .Where(name => !string.IsNullOrWhiteSpace(name)) 
+                .ToList();
+
+            return activeTopics;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Content Error] Failed to get content for course {courseId}: {ex.Message}");
+            return new List<string>();
+        }
+    }
+    /// <summary>
+    /// Внутренние классы для десериализации JSON
+    /// <summary>
     #region JSON Models for GetAllCourses (Internal)
 
     private class MoodleCourseRaw
@@ -366,5 +405,20 @@ public class MoodleService : IMoodleService
     }
     #endregion
     
-    
+    #region JSON Models for Course Content
+    private class MoodleSection 
+    { 
+        [JsonPropertyName("name")] 
+        public string Name { get; set; } = "";
+        [JsonPropertyName("modules")] 
+        public List<MoodleModule> Modules { get; set; } = new();
+    }
+
+    private class MoodleModule
+    {
+        [JsonPropertyName("modname")] 
+        public string ModName { get; set; } = "";
+    }
+    #endregion
+
 }

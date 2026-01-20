@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using RecommenderSystem.Core.Interfaces;
 
+
 namespace RecommenderSystem.Api.Controllers;
 
 [ApiController]
@@ -8,7 +9,7 @@ namespace RecommenderSystem.Api.Controllers;
 public class StudentController : ControllerBase
 {
     private readonly IMoodleService _moodleService;
-    private readonly IRecommendationService _recommendationService;
+    private readonly IRecommendationService _recommendationService; 
 
     public StudentController(IMoodleService moodleService, IRecommendationService recommendationService)
     {
@@ -16,7 +17,6 @@ public class StudentController : ControllerBase
         _recommendationService = recommendationService;
     }
 
-    // Сценарий: Студент вводит логин -> Получает рекомендации
     [HttpGet("analyze")]
     public async Task<IActionResult> AnalyzeStudent([FromQuery] string username, [FromQuery] int courseId)
     {
@@ -34,10 +34,13 @@ public class StudentController : ControllerBase
             return NotFound("У вас пока нет оценок по этому курсу.");
         }
 
-        var tags = await _moodleService.GetCourseTagsAsync(courseId);
-        foreach (var grade in grades) grade.CourseTags = tags;
+        var courseTags = await _moodleService.GetCourseTagsAsync(courseId);
+        var topicTags = await _moodleService.GetTopicsWithActivitiesAsync(courseId);
+        
+        var allContextTags = courseTags.Concat(topicTags).Distinct().ToList();
 
-        var recommendations = await _recommendationService.GetRecommendationsAsync(userId.Value, grades);
+
+        var recommendations = await _recommendationService.GetRecommendationsAsync(userId.Value, grades, allContextTags);
 
         return Ok(new 
         {

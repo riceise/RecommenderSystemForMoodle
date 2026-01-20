@@ -19,25 +19,24 @@ public class AdminController : ControllerBase
         _moodleService = moodleService;
     }
 
-    // Заполенениие базы курсами
     [HttpPost("sync-all-courses")]
     public async Task<IActionResult> SyncAllCoursesFromMoodle()
     {
         var moodleCourses = await _moodleService.GetAllCoursesAsync();
 
-        if (!moodleCourses.Any())
-        {
-            return Ok("В Moodle курсов не найдено.");
-        }
+        if (!moodleCourses.Any()) return Ok("В Moodle курсов не найдено.");
 
         int addedCount = 0;
         int updatedCount = 0;
 
         foreach (var mCourse in moodleCourses)
         {
-
-            var tagNames = await _moodleService.GetCourseTagsAsync(mCourse.Id);
+            var tagNames = mCourse.Tags.Select(t => t.Name).ToList();
             
+            var contentTopics = await _moodleService.GetTopicsWithActivitiesAsync(mCourse.Id);
+            
+            var allTopics = tagNames.Concat(contentTopics).Distinct().ToList();
+
             var existingCourse = await _context.Courses
                 .FirstOrDefaultAsync(c => c.ExternalId == mCourse.Id.ToString());
 
@@ -50,11 +49,11 @@ public class AdminController : ControllerBase
                     Title = mCourse.Fullname,
                     Description = StripHtml(mCourse.Summary),
                     Platform = "Moodle",
-                    Topics = tagNames, 
+                    Topics = allTopics, 
                     Difficulty = "Beginner" 
                 };
                 
-                if (tagNames.Contains("hard") || tagNames.Contains("advanced")) 
+                if (allTopics.Any(t => t.ToLower().Contains("hard") || t.ToLower().Contains("advanced"))) 
                     newCourse.Difficulty = "Advanced";
 
                 _context.Courses.Add(newCourse);
@@ -63,16 +62,16 @@ public class AdminController : ControllerBase
             else
             {
                 existingCourse.Title = mCourse.Fullname;
-                existingCourse.Topics = tagNames; 
-                
+                existingCourse.Description = StripHtml(mCourse.Summary);
+                existingCourse.Topics = allTopics;
                 updatedCount++;
             }
         }
 
         await _context.SaveChangesAsync();
-
-        return Ok($"Синхронизация завершена.\nДобавлено: {addedCount}\nОбновлено: {updatedCount}\nВсего в Moodle: {moodleCourses.Count}");
+        return Ok($"Синхронизация завершена.\nДобавлено: {addedCount}\nОбновлено: {updatedCount}");
     }
+
     [HttpPost("sync-users-grades")]
     public async Task<IActionResult> SyncUsersAndGrades()
     {
@@ -103,16 +102,14 @@ public class AdminController : ControllerBase
                         FullName = mStudent.Fullname
                     };
                     _context.Users.Add(dbUser);
-                    await _context.SaveChangesAsync(); 
+                    await _context.SaveChangesAsync();
                     newUsers++;
                 }
 
-               
                 var grades = await _moodleService.GetUserGradesAsync(mStudent.Id, moodleCourseId);
 
                 var finalGradeItem = grades.FirstOrDefault(g => g.ItemType == "course");
-
-
+                
                 double? finalScore = finalGradeItem?.RawGrade;
                 double? maxScore = finalGradeItem?.MaxGrade;
 
@@ -123,6 +120,7 @@ public class AdminController : ControllerBase
 
                 var userCourse = await _context.UserCourses
                     .FirstOrDefaultAsync(uc => uc.UserId == dbUser.Id && uc.CourseId == course.Id);
+
                 if (userCourse == null)
                 {
                     userCourse = new UserCourse
@@ -148,6 +146,7 @@ public class AdminController : ControllerBase
         await _context.SaveChangesAsync();
         return Ok($"Синхронизация завершена.\nНовых пользователей: {newUsers}\nОценок обновлено: {gradesUpdated}");
     }
+
     private string StripHtml(string input)
     {
         if (string.IsNullOrEmpty(input)) return string.Empty;

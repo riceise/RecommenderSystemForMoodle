@@ -1,11 +1,9 @@
-﻿
-
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using RecommenderSystem.Core.DTOs;
 using RecommenderSystem.Core.DTOs.PythonRequests;
-using RecommenderSystem.Infrastructure.Interfaces;
+using RecommenderSystem.Infrastructure.Interfaces; 
 
 namespace RecommenderSystem.Infrastructure.Services;
 
@@ -28,7 +26,7 @@ public class PythonAiService : IPythonAiService
             ItemName = g.ItemName,
             RawGrade = g.RawGrade ?? 0,
             MaxGrade = g.MaxGrade ?? 100,
-            CourseTags = g.CourseTags.Any() ? g.CourseTags : contextTags
+            CourseTags = contextTags 
         }).ToList();
 
         var requestPayload = new PythonRecommendationRequest

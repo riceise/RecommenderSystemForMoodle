@@ -1,5 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using RecommenderSystem.Core.DTOs;
+using RecommenderSystem.Core.DTOs.PythonRequests;
 using RecommenderSystem.Core.Interfaces;
+using RecommenderSystem.Infrastructure.Interfaces;
+using RecommenderSystem.Infrastructure.Services; // Для IPythonAiService
 
 namespace RecommenderSystem.Api.Controllers;
 
@@ -8,44 +12,34 @@ namespace RecommenderSystem.Api.Controllers;
 public class RecommendationsController : ControllerBase
 {
     private readonly IMoodleService _moodleService;
-    private readonly IRecommendationService _recommendationService;
+    private readonly IPythonAiService _pythonService;
 
-    public RecommendationsController(
-        IMoodleService moodleService, 
-        IRecommendationService recommendationService)
+    public RecommendationsController(IMoodleService moodleService, IPythonAiService pythonService)
     {
         _moodleService = moodleService;
-        _recommendationService = recommendationService;
+        _pythonService = pythonService;
     }
 
-    // Маршрут: GET /api/Recommendations/user/3/course/2
-    [HttpGet("user/{userId}/course/{courseId}")]
-    public async Task<IActionResult> GetRecommendations(int userId, int courseId)
+    [HttpGet("{username}")]
+    public async Task<IActionResult> GetRecommendations(string username)
     {
-        // 1. Получаем оценки (Grades)
-        var grades = await _moodleService.GetUserGradesAsync(userId, courseId);
+        var userId = await _moodleService.GetUserIdByUsernameAsync(username);
+        if (userId == null) return NotFound("User not found in Moodle");
 
-        if (grades == null || !grades.Any())
-        {
-            // Если оценок нет, может быть стоит вернуть "общие" рекомендации?
-            // Но пока вернем 404
-            return NotFound("Оценки не найдены или пользователь не существует.");
-        }
+       
+        int courseId = 2; 
 
-        // 2. Получаем теги курса (Tags)
-        // Например: ["c#", "backend", "web"]
-        var tags = await _moodleService.GetCourseTagsAsync(courseId);
+        var grades = await _moodleService.GetUserGradesAsync(userId.Value, courseId);
+        
+        var courseTags = await _moodleService.GetCourseTagsAsync(courseId);
+        var topicTags = await _moodleService.GetTopicsWithActivitiesAsync(courseId);
+        
+        var allContextTags = courseTags.Concat(topicTags).Distinct().ToList();
 
-        // 3. Обогащаем данные
-        // Добавляем теги курса к каждой оценке, чтобы Python знал контекст.
-        // (Python увидит: "Ага, он завалил тест 'Переменные', и этот тест относится к теме 'c#'")
-        foreach (var grade in grades)
-        {
-            grade.CourseTags = tags;
-        }
+        if (!grades.Any())
+            return Ok(new List<PythonResponseDto>());
 
-        // 4. Отправляем богатые данные в Python
-        var recommendations = await _recommendationService.GetRecommendationsAsync(userId, grades);
+        var recommendations = await _pythonService.GetRecommendationsAsync(userId.Value, grades, allContextTags);
 
         return Ok(recommendations);
     }
