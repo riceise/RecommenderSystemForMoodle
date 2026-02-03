@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("RecommenderSystem.PythonBridge")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f12cc63c1626aa892d26f10309a750e76d22b8b9")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e0481e97470eea3e81bea71f62645a374e02f3c2")]
 [assembly: System.Reflection.AssemblyProductAttribute("RecommenderSystem.PythonBridge")]
 [assembly: System.Reflection.AssemblyTitleAttribute("RecommenderSystem.PythonBridge")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

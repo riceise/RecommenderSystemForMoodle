@@ -1,18 +1,20 @@
-﻿using System.Net.Http.Json;
-using Microsoft.Extensions.Configuration;
-using RecommenderSystem.Core.DTOs; 
-using RecommenderSystem.Core.Interfaces;
-using System.Text.Json.Serialization;
+﻿using System.Collections.Concurrent;
+using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.Json.Nodes; 
-namespace RecommenderSystem.Infrastructure.Services;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using Microsoft.Extensions.Configuration;
+using RecommenderSystem.Core.DTOs;
+using RecommenderSystem.Core.Interfaces;
+
+namespace RecommenderSystem.Core.Services;
 
 public class MoodleService : IMoodleService
 {
     private readonly HttpClient _httpClient;
     private readonly string _token;
 
-    private static readonly Dictionary<int, List<string>> _tagsCache = new();
+    private static readonly ConcurrentDictionary<int, List<string>> _tagsCache = new();
 
     public MoodleService(HttpClient httpClient, IConfiguration configuration)
     {
@@ -30,64 +32,61 @@ public class MoodleService : IMoodleService
     }
 
     /// <summary>
-    /// Получает все курсы из Moodle
+    /// Получает все курсы из Moodle с параллельной подгрузкой тегов
     /// </summary>
     public async Task<List<MoodleCourseDto>> GetAllCoursesAsync()
     {
-        var queryParams = $"?wstoken={_token}&wsfunction=core_course_get_courses&moodlewsrestformat=json";
-
+        var queryParams = $"?wstoken={_token}" +
+                          $"&wsfunction=core_course_get_courses" +
+                          $"&moodlewsrestformat=json";
+        
         List<MoodleCourseDto> resultCourses = new();
 
         try
         {
             var jsonString = await _httpClient.GetStringAsync(queryParams);
             
-            Console.WriteLine($"[GetAllCourses JSON]: {jsonString}");
+            if (string.IsNullOrEmpty(jsonString) || jsonString.Contains("\"exception\""))
+            {
+                Console.WriteLine($"[Moodle API Error/Empty]: {jsonString}");
+                return resultCourses;
+            }
 
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             var jsonNode = JsonNode.Parse(jsonString);
 
             if (jsonNode is JsonArray)
             {
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var rawCourses = JsonSerializer.Deserialize<List<MoodleCourseRaw>>(jsonString, options);
-
                 resultCourses = MapRawToDto(rawCourses);
             }
-            else if (jsonNode is JsonObject jsonObj)
+            else if (jsonNode is JsonObject jsonObj && jsonObj.ContainsKey("courses"))
             {
-                if (jsonObj.ContainsKey("exception"))
-                {
-                    var exMsg = jsonObj["message"]?.ToString();
-                    Console.WriteLine($"[Moodle API Exception]: {exMsg}");
-                    return new List<MoodleCourseDto>(); 
-                }
-
-                if (jsonObj.ContainsKey("courses"))
-                {
-                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                    var wrapper = JsonSerializer.Deserialize<MoodleCourseListResponse>(jsonString, options);
-                    resultCourses = MapRawToDto(wrapper?.Courses);
-                }
-            }
-            else
-            {
-                Console.WriteLine($"[Moodle Error] Unknown JSON format: {jsonString.Substring(0, Math.Min(jsonString.Length, 100))}...");
-                return new List<MoodleCourseDto>();
+                var wrapper = JsonSerializer.Deserialize<MoodleCourseListResponse>(jsonString, options);
+                resultCourses = MapRawToDto(wrapper?.Courses);
             }
 
-            foreach (var course in resultCourses)
+            if (!resultCourses.Any()) return resultCourses;
+            
+            var semaphore = new SemaphoreSlim(20);
+            var tasks = resultCourses.Select(async course =>
             {
-                if (course.Tags == null || !course.Tags.Any())
+                await semaphore.WaitAsync();
+                try
                 {
-                    Console.WriteLine($"Fetching tags for course: {course.Id}...");
-                    var tagStrings = await GetCourseTagsAsync(course.Id);
-                    
-                    course.Tags = tagStrings.Select(t => new MoodleTagDto 
-                    { 
-                        Name = t 
-                    }).ToList();
+                    if (course.Tags == null || !course.Tags.Any())
+                    {
+                        var tagStrings = await GetCourseTagsAsync(course.Id);
+                        course.Tags = tagStrings.Select(t => new MoodleTagDto { Name = t }).ToList();
+                    }
                 }
-            }
+                finally
+                {
+                    semaphore.Release();
+                }
+            });
+
+            await Task.WhenAll(tasks);
 
             return resultCourses;
         }
@@ -103,7 +102,7 @@ public class MoodleService : IMoodleService
         if (rawList == null) return new List<MoodleCourseDto>();
 
         return rawList
-            .Where(c => c.Id > 1) 
+            .Where(c => c.Id > 1)
             .Select(c => new MoodleCourseDto
             {
                 Id = c.Id,
@@ -115,12 +114,9 @@ public class MoodleService : IMoodleService
             .ToList();
     }
 
-    /// <summary>
-    /// Получение тегов
-    /// </summary>
     public async Task<List<string>> GetCourseTagsAsync(int courseId)
     {
-        if (_tagsCache.ContainsKey(courseId)) return _tagsCache[courseId];
+        if (_tagsCache.TryGetValue(courseId, out var cachedTags)) return cachedTags;
 
         var queryParams = $"?wstoken={_token}" +
                           $"&wsfunction=core_tag_get_item_tags" +
@@ -132,13 +128,8 @@ public class MoodleService : IMoodleService
         try
         {
             var jsonResponse = await _httpClient.GetStringAsync(queryParams);
-            
-            Console.WriteLine($"[Tags JSON for Course {courseId}]: {jsonResponse}");
 
-            if (jsonResponse.Contains("\"exception\""))
-            {
-                return new List<string>();
-            }
+            if (jsonResponse.Contains("\"exception\"")) return new List<string>();
 
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             var response = JsonSerializer.Deserialize<MoodleTagResponse>(jsonResponse, options);
@@ -146,11 +137,11 @@ public class MoodleService : IMoodleService
             if (response != null && response.Tags != null)
             {
                 var result = response.Tags.Select(t => t.Name).ToList();
-                _tagsCache[courseId] = result;
+                _tagsCache[courseId] = result; 
                 return result;
             }
         }
-        catch (Exception ex)
+        catch(Exception ex)
         {
             Console.WriteLine($"[Tag Warning] Failed to fetch tags for course {courseId}: {ex.Message}");
         }
@@ -158,9 +149,6 @@ public class MoodleService : IMoodleService
         return new List<string>();
     }
 
-    /// <summary>
-    /// Получает оценки пользователя
-    /// </summary>
     public async Task<List<UserGradeDto>> GetUserGradesAsync(int userId, int courseId)
     {
         var queryParams = $"?wstoken={_token}" +
@@ -173,80 +161,54 @@ public class MoodleService : IMoodleService
         {
             var response = await _httpClient.GetFromJsonAsync<MoodleGradeResponse>(queryParams);
 
-            if (response == null || response.UserGrades == null || !response.UserGrades.Any())
-            {
+            if (response?.UserGrades == null || !response.UserGrades.Any())
                 return new List<UserGradeDto>();
-            }
 
             var userGradeData = response.UserGrades.First();
 
             return userGradeData.GradeItems
                 .Select(item => new UserGradeDto
                 {
-                    ItemName = item.ItemName ?? "Итоговая оценка", 
+                    ItemName = item.ItemName ?? "Итоговая оценка",
                     ItemModule = item.ItemModule,
-                    ItemType = item.ItemType, 
+                    ItemType = item.ItemType,
                     RawGrade = item.GradeRaw,
                     MaxGrade = item.GradeMax
                 })
                 .ToList();
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"[MoodleService] Error fetching grades: {ex.Message}");
             return new List<UserGradeDto>();
         }
     }
 
-    /// <summary>
-    /// Находит ID пользователя по логину
-    /// </summary>
     public async Task<int?> GetUserIdByUsernameAsync(string username)
     {
-        var queryParams = $"?wstoken={_token}" +
-                          $"&wsfunction=core_user_get_users" +
-                          $"&moodlewsrestformat=json" +
-                          $"&criteria[0][key]=username" +
-                          $"&criteria[0][value]={username}";
-
+        var queryParams = $"?wstoken={_token}&wsfunction=core_user_get_users&moodlewsrestformat=json&criteria[0][key]=username&criteria[0][value]={username}";
         try
         {
             var response = await _httpClient.GetFromJsonAsync<MoodleUserResponse>(queryParams);
-
-            if (response != null && response.Users != null && response.Users.Any())
-            {
-                return response.Users.First().Id;
-            }
+            return response?.Users?.FirstOrDefault()?.Id;
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"Error finding user {username}: {ex.Message}");
+            return null;
         }
-
-        return null;
     }
-    
+
     public async Task<List<MoodleUserDto>> GetEnrolledUsersAsync(int courseId)
     {
-        var queryParams = $"?wstoken={_token}" +
-                          $"&wsfunction=core_enrol_get_enrolled_users" +
-                          $"&moodlewsrestformat=json" +
-                          $"&courseid={courseId}";
+        var queryParams = $"?wstoken={_token}&wsfunction=core_enrol_get_enrolled_users&moodlewsrestformat=json&courseid={courseId}";
 
-        try 
+        try
         {
             var jsonResponse = await _httpClient.GetStringAsync(queryParams);
-            
-            // Если Moodle вернул ошибку
-            if (jsonResponse.Contains("\"exception\"")) 
-            {
-                Console.WriteLine($"[Error getting users]: {jsonResponse}");
-                return new List<MoodleUserDto>();
-            }
+            if (jsonResponse.Contains("\"exception\"")) return new List<MoodleUserDto>();
 
             var users = JsonSerializer.Deserialize<List<MoodleEnrolledUserDto>>(jsonResponse);
 
-            return users?.Select(u => new MoodleUserDto 
+            return users?.Select(u => new MoodleUserDto
             {
                 Id = u.Id,
                 Username = u.Username,
@@ -254,15 +216,12 @@ public class MoodleService : IMoodleService
                 Email = u.Email
             }).ToList() ?? new List<MoodleUserDto>();
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"[Error]: {ex.Message}");
             return new List<MoodleUserDto>();
         }
     }
-    /// <summary>
-    /// Возвращает список секций, в которых есть тесты или задания
-    /// </summary>
+
     public async Task<List<string>> GetTopicsWithActivitiesAsync(int courseId)
     {
         var queryParams = $"?wstoken={_token}" +
@@ -273,34 +232,25 @@ public class MoodleService : IMoodleService
         try
         {
             var jsonString = await _httpClient.GetStringAsync(queryParams);
-
-            if (jsonString.Contains("\"exception\""))
-            {
-                Console.WriteLine($"[Content Error]: {jsonString}");
-                return new List<string>();
-            }
+            if (jsonString.Contains("\"exception\"")) return new List<string>();
 
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             var sections = JsonSerializer.Deserialize<List<MoodleSection>>(jsonString, options);
 
             if (sections == null) return new List<string>();
 
-            var activeTopics = sections
-                .Where(section => section.Modules.Any(mod => 
-                    mod.ModName == "quiz" || 
-                    mod.ModName == "assign")) 
+            return sections
+                .Where(section => section.Modules.Any(mod => mod.ModName == "quiz" || mod.ModName == "assign"))
                 .Select(section => section.Name)
-                .Where(name => !string.IsNullOrWhiteSpace(name)) 
+                .Where(name => !string.IsNullOrWhiteSpace(name))
                 .ToList();
-
-            return activeTopics;
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"[Content Error] Failed to get content for course {courseId}: {ex.Message}");
             return new List<string>();
         }
     }
+
     /// <summary>
     /// Внутренние классы для десериализации JSON
     /// <summary>
