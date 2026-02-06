@@ -119,3 +119,16 @@ C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSyst
 C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\zh-Hans\Microsoft.CodeAnalysis.Workspaces.resources.dll
 C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\zh-Hant\Microsoft.CodeAnalysis.Workspaces.resources.dll
 C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.api\obj\Debug\net8.0\RecommenderSystem.Api.sourcelink.json
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\Microsoft.AspNetCore.Cryptography.Internal.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\Microsoft.AspNetCore.Cryptography.KeyDerivation.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\Microsoft.AspNetCore.Identity.EntityFrameworkCore.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\Microsoft.Extensions.Identity.Core.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\Microsoft.Extensions.Identity.Stores.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\Microsoft.IdentityModel.Abstractions.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\Microsoft.IdentityModel.JsonWebTokens.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\Microsoft.IdentityModel.Logging.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\Microsoft.IdentityModel.Tokens.dll
+C:\Users\Murad\RiderProjects\RecommenderSystem\RecommenderSystem\RecommenderSystem.Api\bin\Debug\net8.0\System.IdentityModel.Tokens.Jwt.dll

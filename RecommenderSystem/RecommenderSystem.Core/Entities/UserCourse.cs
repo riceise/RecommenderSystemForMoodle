@@ -3,14 +3,11 @@
 public class UserCourse
 {
     public int Id { get; set; }
-
-    public int UserId { get; set; }
-    
-    public AppUser User { get; set; } = null!;
-
+    public int MoodleStudentId { get; set; }
+    public MoodleStudent? MoodleStudent { get; set; }
     public Guid CourseId { get; set; }
     
-    public Course Course { get; set; } = null!;
+    public Course? Course { get; set; } = null!;
 
     public double? Grade { get; set; }
     

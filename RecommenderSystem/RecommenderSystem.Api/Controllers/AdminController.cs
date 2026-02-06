@@ -28,15 +28,15 @@ public class AdminController : ControllerBase
         var moodleCourses = await _moodleService.GetAllCoursesAsync();
         if (!moodleCourses.Any()) return Ok("В Moodle курсов не найдено.");
 
-       
+
         var existingCourses = await _context.Courses
             .ToDictionaryAsync(c => c.ExternalId);
 
-  
+
         var enrichedCourses = new ConcurrentBag<(MoodleCourseDto Course, List<string> Topics)>();
-        
-        var semaphore = new SemaphoreSlim(10); 
-        
+
+        var semaphore = new SemaphoreSlim(10);
+
         var processingTasks = moodleCourses.Select(async mCourse =>
         {
             await semaphore.WaitAsync();
@@ -60,10 +60,10 @@ public class AdminController : ControllerBase
         {
             var mCourse = item.Course;
             var contentTopics = item.Topics;
-            
+
             var tagNames = mCourse.Tags.Select(t => t.Name).ToList();
             var allTopics = tagNames.Concat(contentTopics).Distinct().ToList();
-            
+
             string difficulty = "Beginner";
             if (allTopics.Any(t => t.ToLower().Contains("hard") || t.ToLower().Contains("advanced")))
                 difficulty = "Advanced";
@@ -104,27 +104,29 @@ public class AdminController : ControllerBase
         var dbCourses = await _context.Courses.ToListAsync();
         if (!dbCourses.Any()) return BadRequest("Сначала синхронизируйте курсы!");
 
-        var dbUsers = await _context.Users.ToDictionaryAsync(u => u.MoodleUserId);
+        var dbMoodleStudents = await _context.MoodleStudents
+            .ToDictionaryAsync(u => u.MoodleUserId);
 
         var dbUserCoursesList = await _context.UserCourses
-            .Include(uc => uc.User)
+            .Include(uc => uc.MoodleStudent)
             .ToListAsync();
-            
+
         var dbUserCoursesMap = new Dictionary<string, UserCourse>();
-        foreach(var uc in dbUserCoursesList)
+        foreach (var uc in dbUserCoursesList)
         {
-            if (uc.User != null)
+            if (uc.MoodleStudent != null)
             {
-                string key = $"{uc.User.MoodleUserId}_{uc.CourseId}";
-                if(!dbUserCoursesMap.ContainsKey(key))
+                string key = $"{uc.MoodleStudent.MoodleUserId}_{uc.CourseId}";
+                if (!dbUserCoursesMap.ContainsKey(key))
                     dbUserCoursesMap[key] = uc;
             }
         }
 
         var fetchedUsersBag = new ConcurrentBag<MoodleUserDto>();
-        var fetchedGradesBag = new ConcurrentBag<(int MoodleUserId, Guid CourseGuid, double? Grade, double? Max)>();
 
-        var semaphore = new SemaphoreSlim(10); 
+        var fetchedGradesBag = new ConcurrentBag<(int MoodleUserId, Guid CourseId, double? Grade, double? Max)>();
+
+        var semaphore = new SemaphoreSlim(10);
 
         var tasks = dbCourses.Select(async course =>
         {
@@ -134,7 +136,7 @@ public class AdminController : ControllerBase
             try
             {
                 var moodleStudents = await _moodleService.GetEnrolledUsersAsync(moodleCourseId);
-                
+
                 foreach (var student in moodleStudents)
                 {
                     fetchedUsersBag.Add(student);
@@ -157,44 +159,42 @@ public class AdminController : ControllerBase
         await Task.WhenAll(tasks);
 
         int newUsersCount = 0;
-        
         var uniqueFetchedUsers = fetchedUsersBag
             .GroupBy(u => u.Id)
             .Select(g => g.First())
             .ToList();
 
-        var usersToAdd = new List<AppUser>();
-
+        var studentsToAdd = new List<MoodleStudent>();
         foreach (var mUser in uniqueFetchedUsers)
         {
-            if (!dbUsers.ContainsKey(mUser.Id))
+            if (!dbMoodleStudents.ContainsKey(mUser.Id))
             {
-                var newUser = new AppUser
+                var newStudent = new MoodleStudent
                 {
                     MoodleUserId = mUser.Id,
                     Username = mUser.Username,
                     Email = mUser.Email,
                     FullName = mUser.Fullname
                 };
-                usersToAdd.Add(newUser);
-                dbUsers[mUser.Id] = newUser; 
+                studentsToAdd.Add(newStudent);
+                dbMoodleStudents[mUser.Id] = newStudent;
             }
         }
 
-        if (usersToAdd.Any())
+        if (studentsToAdd.Any())
         {
-            await _context.Users.AddRangeAsync(usersToAdd);
-            await _context.SaveChangesAsync(); 
-            newUsersCount = usersToAdd.Count;
+            await _context.MoodleStudents.AddRangeAsync(studentsToAdd);
+            await _context.SaveChangesAsync();
+            newUsersCount = studentsToAdd.Count;
         }
 
         int gradesUpdatedCount = 0;
 
         foreach (var gradeData in fetchedGradesBag)
         {
-            if (dbUsers.TryGetValue(gradeData.MoodleUserId, out var userEntity))
+            if (dbMoodleStudents.TryGetValue(gradeData.MoodleUserId, out var studentEntity))
             {
-                string key = $"{gradeData.MoodleUserId}_{gradeData.CourseGuid}";
+                string key = $"{gradeData.MoodleUserId}_{gradeData.CourseId}";
 
                 if (dbUserCoursesMap.TryGetValue(key, out var existingUserCourse))
                 {
@@ -206,21 +206,23 @@ public class AdminController : ControllerBase
                 {
                     var newUserCourse = new UserCourse
                     {
-                        UserId = userEntity.Id,
-                        CourseId = gradeData.CourseGuid,
+                        MoodleStudentId = studentEntity.Id,
+                        CourseId = gradeData.CourseId,
                         Grade = gradeData.Grade,
                         MaxGrade = gradeData.Max,
                         LastSynced = DateTime.UtcNow
                     };
                     _context.UserCourses.Add(newUserCourse);
                 }
+
                 gradesUpdatedCount++;
             }
         }
 
         await _context.SaveChangesAsync();
 
-        return Ok($"Синхронизация завершена.\nНовых пользователей: {newUsersCount}\nОценок обработано: {gradesUpdatedCount}");
+        return Ok(
+            $"Синхронизация завершена.\nНовых студентов в базе: {newUsersCount}\nОценок обработано: {gradesUpdatedCount}");
     }
 
     private string StripHtml(string? input)
