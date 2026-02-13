@@ -75,6 +75,7 @@ builder.Services.AddHttpClient<IRecommendationService, PythonRecommenderService>
 });
 
 var app = builder.Build();
+app.UseCors("AllowFrontend");
 
 
 if (app.Environment.IsDevelopment())
