@@ -250,6 +250,7 @@ public class MoodleService : IMoodleService
             return new List<string>();
         }
     }
+    
 
     /// <summary>
     /// Внутренние классы для десериализации JSON
@@ -370,5 +371,5 @@ public class MoodleService : IMoodleService
         public string ModName { get; set; } = "";
     }
     #endregion
-
+    
 }

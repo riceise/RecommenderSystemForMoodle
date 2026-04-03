@@ -11,6 +11,7 @@ public class AppDbContext : IdentityDbContext<AppUser>
     public DbSet<Course> Courses { get; set; }
     public DbSet<UserCourse> UserCourses { get; set; } 
     public DbSet<MoodleStudent> MoodleStudents { get; set; }
+    public DbSet<UserAssignmentGrade> UserAssignmentGrades { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

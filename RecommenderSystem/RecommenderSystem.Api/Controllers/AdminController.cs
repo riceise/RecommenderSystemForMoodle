@@ -109,6 +109,7 @@ public class AdminController : ControllerBase
 
         var dbUserCoursesList = await _context.UserCourses
             .Include(uc => uc.MoodleStudent)
+            .Include(uc => uc.AssignmentGrades) 
             .ToListAsync();
 
         var dbUserCoursesMap = new Dictionary<string, UserCourse>();
@@ -117,14 +118,12 @@ public class AdminController : ControllerBase
             if (uc.MoodleStudent != null)
             {
                 string key = $"{uc.MoodleStudent.MoodleUserId}_{uc.CourseId}";
-                if (!dbUserCoursesMap.ContainsKey(key))
-                    dbUserCoursesMap[key] = uc;
+                dbUserCoursesMap[key] = uc;
             }
         }
 
         var fetchedUsersBag = new ConcurrentBag<MoodleUserDto>();
-
-        var fetchedGradesBag = new ConcurrentBag<(int MoodleUserId, Guid CourseId, double? Grade, double? Max)>();
+        var fetchedGradesBag = new ConcurrentBag<(int MoodleUserId, Guid CourseId, List<UserGradeDto> Grades)>();
 
         var semaphore = new SemaphoreSlim(10);
 
@@ -142,11 +141,9 @@ public class AdminController : ControllerBase
                     fetchedUsersBag.Add(student);
 
                     var grades = await _moodleService.GetUserGradesAsync(student.Id, moodleCourseId);
-                    var finalGrade = grades.FirstOrDefault(g => g.ItemType == "course");
-
-                    if (finalGrade != null)
+                    if (grades.Any())
                     {
-                        fetchedGradesBag.Add((student.Id, course.Id, finalGrade.RawGrade, finalGrade.MaxGrade));
+                        fetchedGradesBag.Add((student.Id, course.Id, grades));
                     }
                 }
             }
@@ -159,11 +156,7 @@ public class AdminController : ControllerBase
         await Task.WhenAll(tasks);
 
         int newUsersCount = 0;
-        var uniqueFetchedUsers = fetchedUsersBag
-            .GroupBy(u => u.Id)
-            .Select(g => g.First())
-            .ToList();
-
+        var uniqueFetchedUsers = fetchedUsersBag.GroupBy(u => u.Id).Select(g => g.First()).ToList();
         var studentsToAdd = new List<MoodleStudent>();
         foreach (var mUser in uniqueFetchedUsers)
         {
@@ -171,10 +164,7 @@ public class AdminController : ControllerBase
             {
                 var newStudent = new MoodleStudent
                 {
-                    MoodleUserId = mUser.Id,
-                    Username = mUser.Username,
-                    Email = mUser.Email,
-                    FullName = mUser.Fullname
+                    MoodleUserId = mUser.Id, Username = mUser.Username, Email = mUser.Email, FullName = mUser.Fullname
                 };
                 studentsToAdd.Add(newStudent);
                 dbMoodleStudents[mUser.Id] = newStudent;
@@ -189,42 +179,67 @@ public class AdminController : ControllerBase
         }
 
         int gradesUpdatedCount = 0;
+        int assignmentsUpdatedCount = 0;
 
         foreach (var gradeData in fetchedGradesBag)
         {
             if (dbMoodleStudents.TryGetValue(gradeData.MoodleUserId, out var studentEntity))
             {
                 string key = $"{gradeData.MoodleUserId}_{gradeData.CourseId}";
+                var finalGrade = gradeData.Grades.FirstOrDefault(g => g.ItemType == "course");
+                var assignmentGrades = gradeData.Grades.Where(g => g.ItemType == "mod").ToList(); // Задания и тесты
 
-                if (dbUserCoursesMap.TryGetValue(key, out var existingUserCourse))
+                if (!dbUserCoursesMap.TryGetValue(key, out var userCourse))
                 {
-                    existingUserCourse.Grade = gradeData.Grade;
-                    existingUserCourse.MaxGrade = gradeData.Max;
-                    existingUserCourse.LastSynced = DateTime.UtcNow;
-                }
-                else
-                {
-                    var newUserCourse = new UserCourse
+                    userCourse = new UserCourse
                     {
                         MoodleStudentId = studentEntity.Id,
                         CourseId = gradeData.CourseId,
-                        Grade = gradeData.Grade,
-                        MaxGrade = gradeData.Max,
-                        LastSynced = DateTime.UtcNow
+                        AssignmentGrades = new List<UserAssignmentGrade>()
                     };
-                    _context.UserCourses.Add(newUserCourse);
+                    _context.UserCourses.Add(userCourse);
+                    dbUserCoursesMap[key] = userCourse;
                 }
 
+                if (finalGrade != null)
+                {
+                    userCourse.Grade = finalGrade.RawGrade;
+                    userCourse.MaxGrade = finalGrade.MaxGrade;
+                }
+
+                userCourse.LastSynced = DateTime.UtcNow;
                 gradesUpdatedCount++;
+
+                foreach (var ag in assignmentGrades)
+                {
+                    var existingAssign = userCourse.AssignmentGrades.FirstOrDefault(a => a.ItemName == ag.ItemName);
+                    if (existingAssign != null)
+                    {
+                        existingAssign.Grade = ag.RawGrade;
+                        existingAssign.MaxGrade = ag.MaxGrade;
+                        existingAssign.LastSynced = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        userCourse.AssignmentGrades.Add(new UserAssignmentGrade
+                        {
+                            ItemName = ag.ItemName,
+                            ItemModule = ag.ItemModule,
+                            Grade = ag.RawGrade,
+                            MaxGrade = ag.MaxGrade
+                        });
+                    }
+
+                    assignmentsUpdatedCount++;
+                }
             }
         }
 
         await _context.SaveChangesAsync();
 
         return Ok(
-            $"Синхронизация завершена.\nНовых студентов в базе: {newUsersCount}\nОценок обработано: {gradesUpdatedCount}");
+            $"Синхронизация завершена.\nНовых студентов: {newUsersCount}\nКурсов обновлено: {gradesUpdatedCount}\nОценок за задания сохранено: {assignmentsUpdatedCount}");
     }
-
     private string StripHtml(string? input)
     {
         if (string.IsNullOrEmpty(input)) return string.Empty;

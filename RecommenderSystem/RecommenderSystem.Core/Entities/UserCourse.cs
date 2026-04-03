@@ -14,4 +14,7 @@ public class UserCourse
     public double? MaxGrade { get; set; }
 
     public DateTime LastSynced { get; set; } = DateTime.UtcNow;
+    
+    public ICollection<UserAssignmentGrade> AssignmentGrades { get; set; } = new List<UserAssignmentGrade>();
+
 }
