@@ -18,7 +18,6 @@ const router = useRouter()
       </button>
     </aside>
 
-    <!-- Контент -->
     <main class="flex-1 p-10">
       <h1 class="text-3xl font-bold mb-6">Управление системой</h1>
       <div class="bg-gray-800 p-6 rounded-lg border border-gray-700">

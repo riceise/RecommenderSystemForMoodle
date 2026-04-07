@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("RecommenderSystem.Infrastructure")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+25f1e2de33eb0cce2934aa24ad8c720aad211fd8")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9a180615b45fa428560f487b28470e44863e3bb9")]
 [assembly: System.Reflection.AssemblyProductAttribute("RecommenderSystem.Infrastructure")]
 [assembly: System.Reflection.AssemblyTitleAttribute("RecommenderSystem.Infrastructure")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

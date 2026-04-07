@@ -1,74 +1,192 @@
 ﻿<script setup lang="ts">
-import {ref, onMounted} from 'vue'
-import {useRouter} from 'vue-router'
-import {useAuthStore} from '../stores/auth'
-import TheHeader from '../components/TheHeader.vue'
+import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
+
+interface Course {
+  id: string
+  title: string
+  overallGrade: number
+  maxGrade: number
+  /** Вычисляется автоматически */
+  percentage: number
+  /** Флаг «горячего» курса (оценка > 80%) */
+  isHot: boolean
+  /** Флаг курса, требующего внимания (оценка < 60%) */
+  needsAttention: boolean
+  /** Случайный размер для bento-раскладки */
+  sizeVariant: number
+}
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 const isLoading = ref(true)
-const courses = ref<any[]>([])
+const courses = ref<Course[]>([])
 const errorMessage = ref('')
+
+/** Фильтрация по поисковому запросу (приходит из Header через query param) */
+const searchQuery = ref('')
+
+const filteredCourses = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return courses.value
+  return courses.value.filter((c) => c.title.toLowerCase().includes(q))
+})
 
 onMounted(async () => {
   try {
-    const token = authStore.token;
-    if (!token) throw new Error("Необходима авторизация");
+    const token = authStore.token
+    if (!token) throw new Error('Необходима авторизация')
 
     const response = await fetch('http://localhost:5135/api/student/courses', {
-      headers: {'Authorization': `Bearer ${token}`}
-    });
+      headers: { Authorization: `Bearer ${token}` },
+    })
 
-    if (!response.ok) throw new Error("Ошибка загрузки курсов");
-    courses.value = await response.json();
+    if (!response.ok) throw new Error('Ошибка загрузки курсов')
+    const raw: any[] = await response.json()
+
+    courses.value = raw.map((c, i) => {
+      const overallGrade = c.overallGrade ?? c.OverallGrade ?? 0
+      const maxGrade = c.maxGrade ?? c.MaxGrade ?? 0
+      const percentage = maxGrade > 0 ? Math.round((overallGrade / maxGrade) * 100) : 0
+
+      return {
+        id: c.id ?? c.Id,
+        title: c.title ?? c.Title ?? 'Без названия',
+        overallGrade,
+        maxGrade,
+        percentage,
+        isHot: percentage >= 80,
+        needsAttention: percentage < 60,
+        // Распределяем размер: каждый 3-й курс — широкий
+        sizeVariant: i % 3 === 0 ? 2 : 1,
+      }
+    })
   } catch (error: any) {
-    errorMessage.value = error.message;
+    errorMessage.value = error.message
   } finally {
-    isLoading.value = false;
+    isLoading.value = false
   }
 })
 
-const goToCourse = (id: string) => router.push(`/course/${id}`);
+/** Слушаем query-параметр ?search=... */
+const updateSearchFromQuery = () => {
+  const params = new URLSearchParams(window.location.search)
+  searchQuery.value = params.get('search') ?? ''
+}
+
+/** Наблюдаем за изменениями URL */
+import { watch } from 'vue'
+import { useRoute } from 'vue-router'
+const route = useRoute()
+watch(
+  () => route.query.search,
+  (val) => {
+    searchQuery.value = (val as string) ?? ''
+  },
+)
+
+onMounted(() => {
+  updateSearchFromQuery()
+})
+
+const goToCourse = (id: string) => router.push(`/course/${id}`)
+
+const gradeColor = (pct: number): string => {
+  if (pct >= 90) return '#4ade80'
+  if (pct >= 70) return '#60a5fa'
+  if (pct >= 60) return '#fbbf24'
+  return '#f87171'
+}
+
+const gradeLabel = (pct: number): string => {
+  if (pct >= 90) return '5.0 — Отлично'
+  if (pct >= 70) return '4.0 — Хорошо'
+  if (pct >= 60) return '3.0 — Удовл.'
+  return '2.0 — Требуется работа'
+}
 </script>
 
 <template>
   <div class="page-container">
-    <TheHeader/>
-
     <main class="dashboard-content">
       <header class="content-header">
         <h1>Твои курсы под контролем <span class="ai-text">AI</span></h1>
         <p>Выберите курс для анализа успеваемости и получения рекомендаций.</p>
       </header>
 
+      <!-- Loader -->
       <div v-if="isLoading" class="loader-container">
         <div class="spinner"></div>
       </div>
 
+      <!-- Error -->
       <div v-else-if="errorMessage" class="error-msg">{{ errorMessage }}</div>
 
-      <div v-else class="course-grid">
-        <div v-for="course in courses" :key="course.id || course.Id" class="course-card">
-          <div class="card-content">
-            <h3 class="course-title">{{ course.title || course.Title }}</h3>
+      <!-- Empty search -->
+      <div
+        v-else-if="filteredCourses.length === 0 && searchQuery"
+        class="empty-search"
+      >
+        <p>Ничего не найдено по запросу «{{ searchQuery }}»</p>
+      </div>
 
+      <!-- Bento Grid -->
+      <div v-else class="bento-grid">
+        <div
+          v-for="(course, idx) in filteredCourses"
+          :key="course.id"
+          class="bento-card"
+          :class="{
+            'card-wide': course.sizeVariant === 2,
+            'card-hot': course.isHot,
+            'card-attention': course.needsAttention,
+          }"
+        >
+          <!-- Декоративный градиент-фон -->
+          <div class="card-glow" :style="{ background: gradeColor(course.percentage) + '15' }"></div>
+
+          <!-- Бейджи -->
+          <div class="card-badges">
+            <span v-if="course.isHot" class="badge badge-hot">🔥 Hot</span>
+            <span v-if="course.needsAttention" class="badge badge-attention">⚠️ Внимание</span>
+            <span class="badge badge-index">#{{ idx + 1 }}</span>
+          </div>
+
+          <div class="card-content">
+            <h3 class="course-title">{{ course.title }}</h3>
+
+            <!-- Grade -->
             <div class="grade-section">
               <span class="label">Итоговый балл</span>
               <div class="grade-info">
-                <span class="current">{{ course.overallGrade || course.OverallGrade || 0 }}</span>
-                <span class="max">/ {{ course.maxGrade || course.MaxGrade || 0 }}</span>
+                <span
+                  class="current"
+                  :style="{ color: gradeColor(course.percentage) }"
+                >
+                  {{ course.overallGrade }}
+                </span>
+                <span class="max">/ {{ course.maxGrade }}</span>
+                <span class="grade-tag" :style="{ borderColor: gradeColor(course.percentage), color: gradeColor(course.percentage) }">
+                  {{ gradeLabel(course.percentage) }}
+                </span>
               </div>
             </div>
 
-            <!-- Прогресс-бар -->
+            <!-- Progress bar -->
             <div class="progress-track">
-              <div class="progress-fill"
-                   :style="{ width: ((course.overallGrade || 0) / (course.maxGrade || 1) * 100) + '%' }">
-              </div>
+              <div
+                class="progress-fill"
+                :style="{
+                  width: `${course.percentage}%`,
+                  background: `linear-gradient(90deg, ${gradeColor(course.percentage)}, ${gradeColor(course.percentage)}99)`,
+                }"
+              ></div>
             </div>
 
-            <button @click="goToCourse(course.id || course.Id)" class="details-btn">
+            <!-- CTA -->
+            <button @click="goToCourse(course.id)" class="details-btn">
               Подробнее <span>➔</span>
             </button>
           </div>
@@ -81,120 +199,220 @@ const goToCourse = (id: string) => router.push(`/course/${id}`);
 <style scoped>
 .page-container {
   min-height: 100vh;
-  background-color: var(--bg-color);
-  color: var(--text-color);
+  background-color: var(--bg-body);
+  color: var(--text-main);
   transition: background 0.3s ease;
 }
 
 .dashboard-content {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 40px 24px;
+  padding: var(--space-xl) var(--space-lg);
 }
 
 .content-header {
-  margin-bottom: 40px;
+  margin-bottom: var(--space-xl);
   text-align: center;
 }
 
 .content-header h1 {
-  font-size: 36px;
+  font-size: var(--text-4xl);
   font-weight: 800;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-sm);
+  font-family: var(--font-display);
 }
 
 .ai-text {
-  color: #a855f7;
+  color: var(--accent-indigo);
 }
 
 .content-header p {
   color: var(--text-muted);
-  font-size: 18px;
+  font-size: var(--text-lg);
 }
 
-.course-grid {
+/* ─── Bento Grid ─────────────────────────────────────────── */
+.bento-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 25px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-lg);
 }
 
-.course-card {
-  background: var(--card-bg);
+@media (max-width: 1100px) {
+  .bento-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .bento-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─── Card ───────────────────────────────────────────────── */
+.bento-card {
+  background: var(--bg-surface);
+  backdrop-filter: var(--glass-blur);
   border: 1px solid var(--border-color);
-  border-radius: 24px;
-  padding: 30px;
-  transition: all 0.3s ease;
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
   position: relative;
   overflow: hidden;
+  transition: all 0.3s ease;
+  box-shadow: var(--shadow-sm);
 }
 
-.course-card:hover {
+.bento-card:hover {
   transform: translateY(-5px);
-  border-color: #7c3aed;
-  box-shadow: 0 10px 30px rgba(124, 58, 237, 0.1);
+  border-color: var(--accent-indigo);
+  box-shadow: var(--shadow-glow);
+}
+
+/* Широкая карточка (занимает 2 колонки) */
+.card-wide {
+  grid-column: span 2;
+}
+
+@media (max-width: 640px) {
+  .card-wide {
+    grid-column: span 1;
+  }
+}
+
+/* Glow-эффект */
+.card-glow {
+  position: absolute;
+  top: -40%;
+  right: -20%;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Бейджи */
+.card-badges {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-lg);
+  position: relative;
+  z-index: 1;
+}
+
+.badge {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-hot {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.badge-attention {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.badge-index {
+  background: var(--bg-surface-hover);
+  color: var(--text-muted);
+}
+
+/* Content */
+.card-content {
+  position: relative;
+  z-index: 1;
 }
 
 .course-title {
-  font-size: 22px;
+  font-size: var(--text-xl);
   font-weight: 700;
-  margin-bottom: 25px;
+  margin-bottom: var(--space-lg);
   line-height: 1.3;
+  color: var(--text-main);
+  font-family: var(--font-display);
 }
 
 .grade-section {
-  margin-bottom: 15px;
+  margin-bottom: var(--space-sm);
 }
 
 .label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   display: block;
   margin-bottom: 5px;
 }
 
 .grade-info {
-  font-size: 24px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.current {
+  font-size: var(--text-3xl);
   font-weight: 800;
+  font-family: var(--font-display);
 }
 
 .max {
-  font-size: 16px;
+  font-size: var(--text-lg);
   color: var(--text-muted);
   font-weight: 400;
 }
 
+.grade-tag {
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
 .progress-track {
   height: 8px;
-  background: var(--hover-bg);
-  border-radius: 10px;
-  margin-bottom: 30px;
+  background: var(--bg-surface-hover);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-xl);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #6366f1, #a855f7);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   transition: width 1s ease;
 }
 
 .details-btn {
   width: 100%;
-  padding: 14px;
-  border-radius: 12px;
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
   border: none;
-  background: var(--hover-bg);
-  color: var(--text-color);
+  background: var(--bg-surface-hover);
+  color: var(--text-main);
   font-weight: 700;
   cursor: pointer;
   transition: 0.2s;
+  font-size: var(--text-base);
 }
 
 .details-btn:hover {
-  background: #7c3aed;
+  background: var(--accent-indigo);
   color: white;
 }
 
+/* Loader */
 .loader-container {
   padding: 100px;
   text-align: center;
@@ -203,8 +421,8 @@ const goToCourse = (id: string) => router.push(`/course/${id}`);
 .spinner {
   width: 50px;
   height: 50px;
-  border: 5px solid var(--hover-bg);
-  border-top-color: #7c3aed;
+  border: 5px solid var(--bg-surface-hover);
+  border-top-color: var(--accent-indigo);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto;
@@ -216,9 +434,50 @@ const goToCourse = (id: string) => router.push(`/course/${id}`);
   }
 }
 
-@media (max-width: 600px) {
-  .course-grid {
-    grid-template-columns: 1fr;
+/* Error / Empty */
+.error-msg {
+  text-align: center;
+  padding: var(--space-xl);
+  color: #ef4444;
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.empty-search {
+  text-align: center;
+  padding: 80px var(--space-lg);
+  color: var(--text-muted);
+  font-size: var(--text-lg);
+}
+
+/* ─── Mobile ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .content-header h1 {
+    font-size: 28px;
+  }
+
+  .content-header p {
+    font-size: 15px;
+  }
+
+  .course-title {
+    font-size: 18px;
+  }
+
+  .current {
+    font-size: 28px;
+  }
+
+  .bento-card {
+    padding: 20px;
+  }
+
+  .badge {
+    font-size: 11px;
+  }
+
+  .details-btn {
+    font-size: 15px;
   }
 }
 </style>

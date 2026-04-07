@@ -49,3 +49,4 @@ PythonService/.env
 *.sqlite3
 
 PythonService/venv/
+QWEN.md

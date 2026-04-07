@@ -1,47 +1,136 @@
+/* ─── Font imports ───────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ─── CSS Variables (Dark theme — default) ───────────────── */
+:root {
+  --bg-body: #0b0f19;
+  --bg-surface: #111827;
+  --bg-surface-hover: #1f2937;
+  --bg-card: #171f30;
+
+  --text-main: #ffffff;
+  --text-muted: #9ca3af;
+
+  --border-color: #1f2937;
+
+  --accent-indigo: #8b5cf6;
+  --accent-mint: #34d399;
+
+  --glass-bg: #111827;
+  --glass-blur: blur(0px);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.15);
+
+  /* Border radius */
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+
+  /* Typography */
+  --font-base: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --text-xs: 0.8125rem;   /* 13px */
+  --text-sm: 1rem;        /* 16px */
+  --text-base: 1.125rem;  /* 18px */
+  --text-lg: 1.25rem;     /* 20px */
+  --text-xl: 1.375rem;    /* 22px */
+  --text-2xl: 1.75rem;    /* 28px */
+  --text-3xl: 2.25rem;    /* 36px */
+  --text-4xl: 2.75rem;    /* 44px */
+
+  /* Spacing */
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 40px;
+}
+
+/* ─── Light theme ────────────────────────────────────────── */
+body.light-theme {
+  --bg-body: #F8FAFC;
+  --bg-surface: rgba(255, 255, 255, 0.7);
+  --bg-surface-hover: #f1f5f9;
+  --bg-card: #ffffff;
+
+  --text-main: #1E293B;
+  --text-muted: #64748B;
+
+  --border-color: rgba(226, 232, 240, 0.8);
+
+  --accent-indigo: #4F46E5;
+  --accent-mint: #10B981;
+
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-blur: blur(16px);
+
+  /* Shadows for light theme */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 30px -10px rgba(0, 0, 0, 0.12);
+  --shadow-glow: 0 0 20px rgba(79, 70, 229, 0.1);
+}
+
+/* ─── Global resets ──────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
-    margin: 0;
-    padding: 0;
-    background-color: #0f172a;
-    color: #ffffff;
-    font-family: 'Inter', sans-serif;
-    -webkit-font-smoothing: antialiased;
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-body);
+  color: var(--text-main);
+  font-family: var(--font-base);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 button {
-    cursor: pointer;
+  cursor: pointer;
+  font-family: inherit;
 }
 
-:root[data-theme='dark'] {
-    --bg-color: #0f172a;
-    --header-bg: rgba(15, 23, 42, 0.9);
-    --text-color: #f8fafc;
-    --text-muted: #94a3b8;
-    --card-bg: rgba(30, 41, 59, 0.5); 
-    --border-color: rgba(255, 255, 255, 0.1);
-    --hover-bg: rgba(255, 255, 255, 0.05);
+input,
+textarea,
+select {
+  font-family: inherit;
 }
 
-:root[data-theme='light'] {
-    --bg-color: #f1f5f9;
-    --header-bg: rgba(255, 255, 255, 0.9);
-    --text-color: #0f172a;
-    --text-muted: #64748b;
-    --card-bg: #ffffff; 
-    --border-color: rgba(0, 0, 0, 0.08);
-    --hover-bg: #e2e8f0;
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  line-height: 1.2;
+  margin: 0;
 }
 
-* {
-    box-sizing: border-box;
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
-body {
-    margin: 0;
-    padding: 0;
-    background-color: var(--bg-color);
-    transition: background 0.3s;
+/* ─── Mobile: reduce font sizes ─────────────────────────── */
+@media (max-width: 768px) {
+  body {
+    font-size: 15px;
+  }
+
+  h1 { font-size: 1.5rem; }   /* 24px */
+  h2 { font-size: 1.3rem; }   /* ~21px */
+  h3 { font-size: 1.15rem; }  /* ~18px */
+  h4 { font-size: 1.05rem; }  /* ~17px */
 }

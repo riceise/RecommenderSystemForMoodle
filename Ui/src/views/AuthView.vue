@@ -2,11 +2,11 @@
 import {ref, reactive} from 'vue';
 import {useRouter} from 'vue-router';
 import {useAuthStore} from '../stores/auth';
-import {useThemeStore} from '../stores/theme'; // Подключаем тему
+import {useThemeStore} from '../stores/theme'; 
 
 const router = useRouter();
 const authStore = useAuthStore();
-const themeStore = useThemeStore(); // Инициализируем тему
+const themeStore = useThemeStore(); 
 
 const isRegister = ref(false);
 const isLoading = ref(false);
@@ -36,7 +36,6 @@ const handleSubmit = async () => {
 
 <template>
   <div class="auth-container">
-    <!-- Кнопка переключения темы сверху справа -->
     <button @click="themeStore.toggleTheme" class="theme-toggle-btn">
       {{ themeStore.isDark ? '☀️' : '🌙' }}
     </button>
@@ -45,7 +44,6 @@ const handleSubmit = async () => {
     <div class="background-orb orb-2"></div>
 
     <div class="glass-wrapper">
-      <!-- Левая часть (Арт) -->
       <div class="art-section">
         <div class="content">
           <h1 class="logo-text">Neuro<span class="highlight">Tutor</span></h1>
@@ -57,7 +55,6 @@ const handleSubmit = async () => {
         </div>
       </div>
 
-      <!-- Правая часть (Форма) -->
       <div class="form-section">
         <div class="form-header">
           <h2>{{ isRegister ? 'Создать аккаунт' : 'С возвращением!' }}</h2>
@@ -108,14 +105,13 @@ const handleSubmit = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-color); /* Глобальный фон */
+  background: var(--bg-color); 
   position: relative;
   overflow: hidden;
   font-family: 'Inter', sans-serif;
   transition: background 0.3s ease;
 }
 
-/* Кнопка переключения темы */
 .theme-toggle-btn {
   position: absolute;
   top: 20px;
@@ -135,7 +131,6 @@ const handleSubmit = async () => {
   transition: all 0.3s ease;
 }
 
-/* Фоновые пятна */
 .background-orb {
   position: absolute;
   border-radius: 50%;
@@ -160,13 +155,12 @@ const handleSubmit = async () => {
   right: -50px;
 }
 
-/* Основная панель */
 .glass-wrapper {
   display: flex;
   width: 900px;
   max-width: 95%;
   min-height: 600px;
-  background: var(--card-bg); /* Использование переменной */
+  background: var(--card-bg); 
   backdrop-filter: blur(16px);
   border: 1px solid var(--border-color);
   border-radius: 24px;
@@ -203,7 +197,6 @@ const handleSubmit = async () => {
   line-height: 1.5;
 }
 
-/* 3D Сферы */
 .illustration-3d {
   position: relative;
   height: 200px;
@@ -243,7 +236,6 @@ const handleSubmit = async () => {
   }
 }
 
-/* Правая часть (Форма) */
 .form-section {
   flex: 1;
   padding: 50px;

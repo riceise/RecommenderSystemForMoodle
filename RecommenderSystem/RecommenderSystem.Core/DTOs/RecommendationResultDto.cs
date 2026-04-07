@@ -2,8 +2,12 @@
 
 public class RecommendationResultDto
 {
-    public string CourseId { get; set; } = string.Empty;
+    public int? CourseId { get; set; }
     public string Title { get; set; } = string.Empty;
-    public double Score { get; set; } // Уверенность модели (0.0 - 1.0)
-    public string Reason { get; set; } = string.Empty; // "Рекомендуем, так как вы завалили C#"
+    public string Description { get; set; } = string.Empty;
+    public string ResourceType { get; set; } = "article";
+    public string? Url { get; set; }
+    public double RelevanceScore { get; set; }
+    public List<string> Topics { get; set; } = new();
+    public string Difficulty { get; set; } = "Standard";
 }

@@ -2,6 +2,8 @@
 Flask==3.0.3
 python-dotenv>=1.0.0
 requests==2.32.0
+pydantic==2.5.0
+gunicorn==21.2.0
 
 # ML / Recommender system
 lightfm @ git+https://github.com/lyst/lightfm.git@master 
@@ -11,7 +13,7 @@ pandas
 numpy
 
 # AI integrations
-groq==0.4.0
+groq
 sentence-transformers==2.7.0
 
 psycopg2-binary

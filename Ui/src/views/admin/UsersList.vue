@@ -1,4 +1,16 @@
-﻿<template>
+﻿<script setup lang="ts">
+// TODO: Wire this component to a real API endpoint when available
+interface User {
+  id: string
+  email: string
+  fullName: string
+  moodleUserId: number
+}
+
+const users: User[] = [] // Placeholder — replace with API call
+</script>
+
+<template>
   <div class="bg-white p-6 rounded-lg shadow-sm">
     <h2 class="text-2xl font-bold mb-6 text-gray-800">Пользователи системы</h2>
 
