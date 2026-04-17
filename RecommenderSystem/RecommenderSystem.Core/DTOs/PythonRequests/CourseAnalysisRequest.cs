@@ -12,7 +12,10 @@ public class CourseAnalysisRequest
 
     [JsonPropertyName("courseId")]
     public Guid CourseId { get; set; }
-
+    
+    [JsonPropertyName("courseName")]
+    public string CourseName { get; set; } = string.Empty;
+    
     [JsonPropertyName("grades")]
     public List<CourseGradeEntry> Grades { get; set; } = new();
 

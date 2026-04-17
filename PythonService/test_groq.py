@@ -16,6 +16,7 @@ def test_groq_qwen():
             ],
             temperature=0.6,
             max_tokens=500,
+            response_format={"type": "json_object"}  
 
         )
         print("✅ Groq работает!")

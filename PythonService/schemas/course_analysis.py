@@ -11,6 +11,7 @@ class GradeEntry(BaseModel):
 class CourseAnalysisRequest(BaseModel):
     userId: int
     courseId: str
+    courseName: str
     grades: List[GradeEntry] = Field(default_factory=list)
     courseTags: List[str] = Field(default_factory=list)
 

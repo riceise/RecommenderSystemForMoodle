@@ -6,6 +6,7 @@ using RecommenderSystem.Infrastructure.Persistence;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using RecommenderSystem.Core.DTOs;
+using System.Net.Http;
 
 namespace RecommenderSystem.Api.Controllers;
 
@@ -15,18 +16,139 @@ public class AdminController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly IMoodleService _moodleService;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IConfiguration _configuration;
 
-    public AdminController(AppDbContext context, IMoodleService moodleService)
+    public AdminController(AppDbContext context, IMoodleService moodleService, IHttpClientFactory httpClientFactory, IConfiguration configuration)
     {
         _context = context;
         _moodleService = moodleService;
+        _httpClientFactory = httpClientFactory;
+        _configuration = configuration;
     }
 
+
+    [HttpGet("dashboard")]
+    public async Task<ActionResult<AdminDashboardDto>> GetDashboardStats()
+    {
+        var totalStudents = await _context.MoodleStudents.CountAsync();
+        var activeCourses = await _context.Courses.CountAsync();
+        var syncedGrades = await _context.UserAssignmentGrades.CountAsync();
+
+        var lastSyncedCourse = await _context.UserCourses
+            .OrderByDescending(uc => uc.LastSynced)
+            .Select(uc => uc.LastSynced)
+            .FirstOrDefaultAsync();
+
+        var lastSyncStatus = lastSyncedCourse != default(DateTime) ? "Success" : "Never";
+        var lastSyncDate = lastSyncedCourse != default(DateTime) ? lastSyncedCourse : (DateTime?)null;
+
+        bool pythonServiceOnline = false;
+        int recommendationsGenerated = 0;
+        double avgResponseTimeMs = 0;
+
+        try
+        {
+            var pythonUrl = _configuration["PythonService:Url"] ?? "http://localhost:5001";
+            var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(3);
+            var response = await client.GetAsync($"{pythonUrl}/health");
+            if (response.IsSuccessStatusCode)
+            {
+                pythonServiceOnline = true;
+            }
+        }
+        catch
+        {
+            pythonServiceOnline = false;
+        }
+
+        return new AdminDashboardDto
+        {
+            TotalStudents = totalStudents,
+            ActiveCourses = activeCourses,
+            SyncedGradesCount = syncedGrades,
+            LastSyncStatus = lastSyncStatus,
+            LastSyncDate = lastSyncDate,
+            PythonServiceOnline = pythonServiceOnline,
+            RecommendationsGenerated = recommendationsGenerated,
+            AvgResponseTimeMs = avgResponseTimeMs
+        };
+    }
+
+    
+
+    [HttpGet("courses")]
+    public async Task<ActionResult<List<CourseAdminDto>>> GetCourses()
+    {
+        var courses = await _context.Courses
+            .Select(c => new CourseAdminDto
+            {
+                Id = c.Id,
+                Title = c.Title,
+                Platform = c.Platform,
+                Topics = c.Topics,
+                Difficulty = c.Difficulty
+            })
+            .ToListAsync();
+
+        return courses;
+    }
+
+    
+
+    [HttpPut("courses/{id}")]
+    public async Task<IActionResult> UpdateCourse(Guid id, [FromBody] UpdateCourseRequestDto request)
+    {
+        var course = await _context.Courses.FindAsync(id);
+        if (course == null) return NotFound("Course not found.");
+
+        var validDifficulties = new[] { "Beginner", "Standard", "Advanced" };
+        if (!validDifficulties.Contains(request.Difficulty))
+            return BadRequest("Invalid difficulty value.");
+
+        course.Difficulty = request.Difficulty;
+        course.Topics = request.Topics ?? new List<string>();
+
+        await _context.SaveChangesAsync();
+        return Ok(new { message = "Course updated successfully." });
+    }
+
+
+    [HttpGet("activity")]
+    public async Task<ActionResult<List<ActivityDataDto>>> GetActivity()
+    {
+        var now = DateTime.UtcNow;
+        var activityData = new List<ActivityDataDto>();
+
+        for (int i = 6; i >= 0; i--)
+        {
+            var date = now.Date.AddDays(-i);
+            var nextDate = date.AddDays(1);
+
+            var registrations = await _context.UserCourses
+                .CountAsync(uc => uc.LastSynced >= date && uc.LastSynced < nextDate);
+
+            var gradesReceived = await _context.UserAssignmentGrades
+                .CountAsync(g => g.LastSynced >= date && g.LastSynced < nextDate);
+
+            activityData.Add(new ActivityDataDto
+            {
+                Date = date.ToString("yyyy-MM-dd"),
+                Registrations = registrations,
+                GradesReceived = gradesReceived
+            });
+        }
+
+        return activityData;
+    }
+
+
     [HttpPost("sync-all-courses")]
-    public async Task<IActionResult> SyncAllCoursesFromMoodle()
+    public async Task<ActionResult<AdminSyncResultDto>> SyncAllCoursesFromMoodle()
     {
         var moodleCourses = await _moodleService.GetAllCoursesAsync();
-        if (!moodleCourses.Any()) return Ok("В Moodle курсов не найдено.");
+        if (!moodleCourses.Any()) return Ok(new AdminSyncResultDto { Success = true, Message = "В Moodle курсов не найдено." });
 
 
         var existingCourses = await _context.Courses
@@ -95,11 +217,18 @@ public class AdminController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        return Ok($"Синхронизация завершена.\nДобавлено: {addedCount}\nОбновлено: {updatedCount}");
+        var message = $"Синхронизация завершена.\nДобавлено: {addedCount}\nОбновлено: {updatedCount}";
+        return Ok(new AdminSyncResultDto
+        {
+            Success = true,
+            AddedCount = addedCount,
+            UpdatedCount = updatedCount,
+            Message = message
+        });
     }
 
     [HttpPost("sync-users-grades")]
-    public async Task<IActionResult> SyncUsersAndGrades()
+    public async Task<ActionResult<AdminSyncResultDto>> SyncUsersAndGrades()
     {
         var dbCourses = await _context.Courses.ToListAsync();
         if (!dbCourses.Any()) return BadRequest("Сначала синхронизируйте курсы!");
@@ -237,9 +366,18 @@ public class AdminController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        return Ok(
-            $"Синхронизация завершена.\nНовых студентов: {newUsersCount}\nКурсов обновлено: {gradesUpdatedCount}\nОценок за задания сохранено: {assignmentsUpdatedCount}");
+        var message = $"Синхронизация завершена.\nНовых студентов: {newUsersCount}\nКурсов обновлено: {gradesUpdatedCount}\nОценок за задания сохранено: {assignmentsUpdatedCount}";
+        return Ok(new AdminSyncResultDto
+        {
+            Success = true,
+            NewStudentsCount = newUsersCount,
+            UpdatedCount = gradesUpdatedCount,
+            GradesUpdatedCount = gradesUpdatedCount,
+            AssignmentsUpdatedCount = assignmentsUpdatedCount,
+            Message = message
+        });
     }
+
     private string StripHtml(string? input)
     {
         if (string.IsNullOrEmpty(input)) return string.Empty;

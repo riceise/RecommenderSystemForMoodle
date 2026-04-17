@@ -80,4 +80,4 @@ class MoodleService:
         if 'sql' in name_lower or 'баз' in name_lower: return 'Databases'
         if 'c#' in name_lower: return 'C#'
         if 'algorithm' in name_lower: return 'Algorithms'
-        return name # Если не угадали, возвращаем название как есть
+        return name 

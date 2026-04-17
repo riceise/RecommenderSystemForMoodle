@@ -226,7 +226,6 @@ public class StudentController : ControllerBase
                 }
             }
 
-            // Высчитываем среднее арифметическое именно из ЦЕЛЫХ оценок
             var overallAvg = finalGrades.Count > 0
                 ? Math.Round((double)finalGrades.Sum() / finalGrades.Count, 1)
                 : 0;
@@ -321,7 +320,7 @@ public class StudentController : ControllerBase
 
     /// <summary>
     /// AI-анализ успеваемости студента по конкретному курсу.
-    /// Собирает оценки, теги → отправляет в Python → Groq LLM → возвращает анализ + рекомендации.
+    /// Собирает оценки, теги отправляет в Python > Groq LLM возвращает анализ + рекомендации.
     /// </summary>
     [HttpGet("courses/{courseId:guid}/ai-analysis")]
     [ProducesResponseType(typeof(CourseAnalysisResponseDto), StatusCodes.Status200OK)]
@@ -334,7 +333,6 @@ public class StudentController : ControllerBase
         if (moodleUserId == null || moodleUserId == 0)
             return BadRequest("Аккаунт не привязан к Moodle.");
 
-        // Проверяем, что курс существует и привязан к студенту
         var userCourse = await _context.UserCourses
             .Include(uc => uc.Course)
             .FirstOrDefaultAsync(uc => uc.CourseId == courseId
@@ -350,7 +348,6 @@ public class StudentController : ControllerBase
         }
         catch (Exception)
         {
-            // Логируем и возвращаем 503 — сервис недоступен
             return StatusCode(StatusCodes.Status503ServiceUnavailable,
                 new ProblemDetails
                 {

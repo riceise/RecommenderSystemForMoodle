@@ -64,12 +64,14 @@ public class PythonAiService : IPythonAiService
     /// </summary>
     public async Task<CourseAnalysisResponseDto?> AnalyzeCourseAsync(
         int moodleUserId,
+        string courseName, 
         List<UserGradeDto> grades,
         List<string> courseTags)
     {
         var requestPayload = new CourseAnalysisRequest
         {
             UserId = moodleUserId,
+            CourseName = courseName, 
             Grades = grades.Select(g => new CourseGradeEntry
             {
                 ItemName = g.ItemName,

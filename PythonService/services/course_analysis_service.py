@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class CourseAnalysisGroqService:
 
-    MODEL = os.getenv("GROQ_MODEL", "moonshotai/kimi-k2-instruct-0905")
+    MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     WEAK_THRESHOLD = 0.6
     STRONG_THRESHOLD = 0.85
 
@@ -38,6 +38,7 @@ class CourseAnalysisGroqService:
             prompt = self._build_prompt(
                 user_id=request.userId,
                 course_id=request.courseId,
+                course_name=request.courseName,
                 weak_topics=weak_topics,
                 strong_topics=strong_topics,
                 all_topics=all_topics,
@@ -108,7 +109,8 @@ class CourseAnalysisGroqService:
 3. "Analysis" — краткий (2-3 предложения) анализ успеваемости НА РУССКОМ ЯЗЫКЕ.
 4. "WeakTopics" — массив строк: названия тем/заданий, где студент набрал < 60%.
 5. "StrongTopics" — массив строк: названия тем/заданий, где студент набрал > 85%.
-6. "Recommendations" — массив из 3-5 объектов. Каждый объект содержит:
+6. Ссылки должны быть существующими
+7. "Recommendations" — массив из 3-5 объектов. Каждый объект содержит:
    - "Title" (string): название ресурса
    - "Description" (string): краткое описание НА РУССКОМ, КАК ИМЕННО это поможет
    - "ResourceType" (string): один из "article", "video", "course", "exercise"
@@ -122,6 +124,7 @@ class CourseAnalysisGroqService:
         self,
         user_id: int,
         course_id: str,
+        course_name: str,
         weak_topics: List[str],
         strong_topics: List[str],
         all_topics: List[str],
@@ -139,6 +142,7 @@ class CourseAnalysisGroqService:
 
         return f"""Студент #{user_id}, курс ID: {course_id}.
 
+ВНИМАНИЕ: Рекомендации должны СТРОГО соответствовать технологическому стеку курса (например, если курс по C# и Веб-разработке, КАТЕГОРИЧЕСКИ ЗАПРЕЩАЕТСЯ предлагать материалы по Python, Java, C++ и другим нерелевантным языкам).
 📊 Оценки по заданиям:
 {grades_text}
 

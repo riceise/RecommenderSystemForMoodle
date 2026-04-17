@@ -7,6 +7,5 @@ public interface IPythonAiService
 {
     Task<List<PythonResponseDto>> GetRecommendationsAsync(int userId, List<UserGradeDto> grades, List<string> contextTags);
     Task TriggerDataReloadAsync();
-    Task<CourseAnalysisResponseDto?> AnalyzeCourseAsync(int moodleUserId, List<UserGradeDto> grades, List<string> courseTags);
-    Task<string?> ChatAsync(ChatContextRequest request);
+    Task<CourseAnalysisResponseDto?> AnalyzeCourseAsync(int moodleUserId, string courseName, List<UserGradeDto> grades, List<string> courseTags);    Task<string?> ChatAsync(ChatContextRequest request);
 }

@@ -34,8 +34,7 @@ public class CourseAnalysisService : ICourseAnalysisService
     }
 
     public async Task<CourseAnalysisResponseDto> AnalyzeCourseAsync(int moodleUserId, Guid courseId)
-    {
-        // 0. Загружаем курс один раз — используем далее
+    { 
         var course = await _context.Courses.FirstOrDefaultAsync(c => c.Id == courseId);
         if (course == null)
         {
@@ -43,7 +42,6 @@ public class CourseAnalysisService : ICourseAnalysisService
             return BuildFallbackResponse("Неизвестный курс");
         }
 
-        // 1. Получаем оценки студента по заданиям курса из БД
         var assignmentGrades = await _context.UserAssignmentGrades
             .Where(ag => ag.UserCourseId != null
                          && _context.UserCourses
@@ -58,7 +56,6 @@ public class CourseAnalysisService : ICourseAnalysisService
             })
             .ToListAsync();
 
-        // 2. Если в БД нет оценок — пробуем получить из Moodle напрямую
         if (!assignmentGrades.Any())
         {
             _logger.LogInformation("No grades in DB for user {UserId} course {CourseId}, fetching from Moodle",
@@ -76,7 +73,6 @@ public class CourseAnalysisService : ICourseAnalysisService
             }
         }
 
-        // 3. Получаем теги курса из Moodle
         var courseTags = new List<string>();
         if (int.TryParse(course.ExternalId, out var moodleCourseIdForTags))
         {
@@ -90,21 +86,18 @@ public class CourseAnalysisService : ICourseAnalysisService
             }
         }
 
-        // Добавляем темы курса как дополнительные теги
         if (course.Topics is { Count: > 0 })
         {
             courseTags = courseTags.Concat(course.Topics).Distinct().ToList();
         }
 
-        // 4. Вызываем Python-сервис для AI-анализа
-        var pythonResult = await _pythonAiService.AnalyzeCourseAsync(moodleUserId, assignmentGrades, courseTags);
+        var pythonResult = await _pythonAiService.AnalyzeCourseAsync(moodleUserId, course.Title, assignmentGrades, courseTags);
 
         if (pythonResult != null)
         {
             return pythonResult;
         }
 
-        // 5. Fallback: если Python недоступен — возвращаем заглушку
         _logger.LogWarning("Python service unavailable, returning fallback analysis for user {UserId} course {CourseId}",
             moodleUserId, courseId);
 

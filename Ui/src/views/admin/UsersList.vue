@@ -7,7 +7,7 @@ interface User {
   moodleUserId: number
 }
 
-const users: User[] = [] // Placeholder — replace with API call
+const users: User[] = [] 
 </script>
 
 <template>
