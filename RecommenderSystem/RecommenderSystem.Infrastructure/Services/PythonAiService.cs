@@ -35,6 +35,8 @@ public class PythonAiService : IPythonAiService
         var requestPayload = new PythonRecommendationRequest
         {
             UserId = userId,
+            SessionId = $"rec-{userId}",
+            ContextTags = contextTags,
             MoodleGrades = pythonGrades
         };
 
@@ -49,8 +51,8 @@ public class PythonAiService : IPythonAiService
             var responseString = await response.Content.ReadAsStringAsync();
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
-            return JsonSerializer.Deserialize<List<PythonResponseDto>>(responseString, options)
-                   ?? new List<PythonResponseDto>();
+            var wrapper = JsonSerializer.Deserialize<PythonRecommendationResponse>(responseString, options);
+            return wrapper?.Recommendations ?? new List<PythonResponseDto>();
         }
         catch (Exception ex)
         {
@@ -113,6 +115,11 @@ public class PythonAiService : IPythonAiService
 
     public async Task<string?> ChatAsync(ChatContextRequest request)
     {
+        if (string.IsNullOrWhiteSpace(request.SessionId))
+        {
+            request.SessionId = $"chat-{request.UserId}";
+        }
+
         var json = JsonSerializer.Serialize(request);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 
@@ -154,5 +161,11 @@ public class PythonAiService : IPythonAiService
         {
             _logger.LogError(ex, "[Python Reload Error] Failed to notify Python service");
         }
+    }
+
+    private class PythonRecommendationResponse
+    {
+        public int UserId { get; set; }
+        public List<PythonResponseDto> Recommendations { get; set; } = new();
     }
 }

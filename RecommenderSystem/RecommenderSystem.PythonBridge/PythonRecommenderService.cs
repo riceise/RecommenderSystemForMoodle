@@ -15,18 +15,20 @@ public class PythonRecommenderService : IRecommendationService
 
     public async Task<List<RecommendationResultDto>> GetRecommendationsAsync(int userId, List<UserGradeDto> grades, List<string> contextTags)
     {
-       
+        var sessionId = $"rec-{userId}";
         var pythonGrades = grades.Select(g => new
         {
             ItemName = g.ItemName,
             RawGrade = g.RawGrade ?? 0,
             MaxGrade = g.MaxGrade ?? 100,
-            CourseTags = contextTags 
+            CourseTags = contextTags
         }).ToList();
 
         var payload = new
         {
             userId = userId,
+            sessionId = sessionId,
+            contextTags = contextTags,
             moodleGrades = pythonGrades
         };
 
@@ -36,21 +38,20 @@ public class PythonRecommenderService : IRecommendationService
         response.EnsureSuccessStatusCode();
 
         
-        try 
+        try
         {
-            var result = await response.Content.ReadFromJsonAsync<List<RecommendationResultDto>>();
-            return result ?? new List<RecommendationResultDto>();
+            var result = await response.Content.ReadFromJsonAsync<RecommendationWrapper>();
+            return result?.Recommendations ?? new List<RecommendationResultDto>();
         }
         catch
         {
-            var wrapper = await response.Content.ReadFromJsonAsync<PythonResponseWrapper>();
-            return wrapper?.Recommendations ?? new List<RecommendationResultDto>();
+            return new List<RecommendationResultDto>();
         }
     }
 
-    private class PythonResponseWrapper
+    private class RecommendationWrapper
     {
         public int UserId { get; set; }
-        public List<RecommendationResultDto> Recommendations { get; set; }
+        public List<RecommendationResultDto> Recommendations { get; set; } = new();
     }
 }

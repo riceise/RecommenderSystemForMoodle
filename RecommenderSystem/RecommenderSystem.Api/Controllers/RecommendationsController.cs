@@ -154,6 +154,7 @@ public class RecommendationsController : ControllerBase
         var chatRequest = new ChatContextRequest
         {
             UserId = moodleUserId.Value,
+            SessionId = string.IsNullOrWhiteSpace(request.SessionId) ? $"chat-{moodleUserId.Value}" : request.SessionId,
             Message = request.Message,
             Context = request.Context,
             CourseName = courseName,

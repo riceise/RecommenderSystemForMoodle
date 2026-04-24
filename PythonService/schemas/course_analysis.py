@@ -17,6 +17,7 @@ class CourseAnalysisRequest(BaseModel):
 
 
 class RecommendationItem(BaseModel):
+    SourceKind: str = "internal"
     Title: str = ""
     Description: str = ""
     ResourceType: str = "article"

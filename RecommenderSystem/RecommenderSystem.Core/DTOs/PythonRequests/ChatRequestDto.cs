@@ -4,6 +4,9 @@ namespace RecommenderSystem.Core.DTOs.PythonRequests;
 
 public class ChatRequestDto
 {
+    [JsonPropertyName("sessionId")]
+    public string SessionId { get; set; } = string.Empty;
+
     [JsonPropertyName("message")]
     public string Message { get; set; } = string.Empty;
 
@@ -36,6 +39,9 @@ public class ChatContextRequest
 {
     [JsonPropertyName("userId")]
     public int UserId { get; set; }
+
+    [JsonPropertyName("sessionId")]
+    public string SessionId { get; set; } = string.Empty;
 
     [JsonPropertyName("message")]
     public string Message { get; set; } = string.Empty;
