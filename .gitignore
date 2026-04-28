@@ -52,4 +52,5 @@ PythonService/venv/
 
 .fake
 RecommenderSystem/RecommenderSystem/RecommenderSystem.Api/bin/
-RecommenderSystem/RecommenderSystem.Api/obj
+RecommenderSystem/RecommenderSystem.Api/obj/
+RecommenderSystem/RecommenderSystem.Api/bin/
