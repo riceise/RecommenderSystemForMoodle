@@ -25,12 +25,12 @@ class ExternalCourseService:
             return {"saved": 0, "queries": [], "results": []}
 
         resources = self.discover_resources(weak_topics)
-        courses = self._select_persistable_courses(resources)
-        saved = self.postgres.upsert_external_courses([self._to_db_course(course) for course in courses])
+        selected = self._select_persistable_resources(resources)
+        saved = self.postgres.upsert_external_courses([self._to_db_course(resource) for resource in selected])
         return {
             "saved": saved,
             "queries": list(dict.fromkeys([item.get("SearchQuery", "") for item in resources if item.get("SearchQuery")])),
-            "results": courses,
+            "results": selected,
         }
 
     def discover_resources(self, weak_topics: list[str]) -> list[dict[str, Any]]:
@@ -80,6 +80,10 @@ class ExternalCourseService:
             logger.warning("Fresh external discovery failed: %s", ex)
             return []
 
+    def persist_resources(self, resources: list[dict[str, Any]]) -> int:
+        selected = self._select_persistable_resources(resources)
+        return self.postgres.upsert_external_courses([self._to_db_course(resource) for resource in selected])
+
     def discover_courses_background(self, weak_topics: list[str], force_refresh: bool = False) -> None:
         if not config.WEB_SEARCH_ENABLED or not config.EXTERNAL_DISCOVERY_BACKGROUND_ENABLED:
             return
@@ -109,10 +113,12 @@ class ExternalCourseService:
                 continue
             queries.extend([
                 f'site:coursera.org/learn "{topic_text}" course',
+                f'site:edx.org/learn "{topic_text}" course',
                 f'site:youtube.com/watch "{topic_text}" tutorial',
                 f'site:learn.microsoft.com "{topic_text}" tutorial',
                 f'site:developer.mozilla.org "{topic_text}" tutorial',
-                f'site:edx.org/learn "{topic_text}" course',
+                f'site:geeksforgeeks.org "{topic_text}" tutorial',
+                f'site:w3schools.com "{topic_text}" tutorial',
                 f'site:coursera.org/specializations "{topic_text}" course',
             ])
         return queries
@@ -175,7 +181,7 @@ class ExternalCourseService:
             "DiscoveryMethod": "searxng_fallback",
         }
 
-    def _select_persistable_courses(self, resources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _select_persistable_resources(self, resources: list[dict[str, Any]]) -> list[dict[str, Any]]:
         courses = [
             item for item in resources
             if item.get("ResourceType") == "course" and self._is_course_domain(item.get("Url"))
@@ -190,7 +196,19 @@ class ExternalCourseService:
             if item.get("SearchQuery") in has_specific_by_query and not self.validator.is_specific_course_url(item.get("Url")):
                 continue
             selected.append(item)
-        return selected
+
+        for item in resources:
+            if item.get("ResourceType") in {"article", "video"} and self._is_trusted_resource_domain(item.get("Url")):
+                selected.append(item)
+
+        deduped: dict[str, dict[str, Any]] = {}
+        for item in selected:
+            url = self.validator.normalize_url(item.get("Url"))
+            if not url:
+                continue
+            if url not in deduped or item.get("ConfidenceScore", 0) > deduped[url].get("ConfidenceScore", 0):
+                deduped[url] = item
+        return list(deduped.values())
 
     def _to_db_course(self, item: dict[str, Any]) -> dict:
         return {
@@ -202,6 +220,7 @@ class ExternalCourseService:
             "url": item.get("Url"),
             "language": item.get("Language", "en"),
             "provider_course_id": item.get("ProviderCourseId"),
+            "resource_type": item.get("ResourceType", "course"),
             "confidence_score": item.get("ConfidenceScore", 0.0),
             "metadata": item.get("Metadata", {}),
             "search_query": item.get("SearchQuery", ""),

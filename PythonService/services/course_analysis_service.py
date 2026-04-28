@@ -233,6 +233,11 @@ class CourseAnalysisGroqService:
                 logger.warning("Skip malformed recommendation item: %s", e)
                 continue
 
+        if external_candidates:
+            external_recs = [rec for rec in recommendations if rec.Url]
+            internal_recs = [rec for rec in recommendations if not rec.Url]
+            recommendations = external_recs + internal_recs[:2]
+
         used_urls = {rec.Url for rec in recommendations if rec.Url}
         for fallback in self._build_external_fallback_recommendations(external_candidates):
             if len(recommendations) >= 5:
@@ -284,6 +289,8 @@ class CourseAnalysisGroqService:
             search_topics,
             timeout_seconds=config.FRESH_DISCOVERY_TIMEOUT_SECONDS,
         )
+        if fresh_candidates:
+            self.external_course_service.persist_resources(fresh_candidates)
         self.external_course_service.discover_courses_background(search_topics)
 
         try:
@@ -306,6 +313,8 @@ class CourseAnalysisGroqService:
 
         for course in candidates:
             score = self._score_external_course(course, search_topics)
+            if score <= 0.2:
+                continue
             ranked.append({
                 "Title": course.get("Title", ""),
                 "Description": course.get("Description", ""),
@@ -313,7 +322,7 @@ class CourseAnalysisGroqService:
                 "Difficulty": course.get("Difficulty", "Standard"),
                 "Topics": course.get("Topics") or [],
                 "Url": course.get("Url"),
-                "ResourceType": "course",
+                "ResourceType": course.get("ResourceType", "course"),
                 "RelevanceScore": score,
             })
 

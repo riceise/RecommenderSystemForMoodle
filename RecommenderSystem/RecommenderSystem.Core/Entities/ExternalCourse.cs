@@ -8,6 +8,7 @@ public class ExternalCourse
     public string Platform { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public string Difficulty { get; set; } = "Beginner";
+    public string ResourceType { get; set; } = "course";
     public List<string> Topics { get; set; } = new();
     public string Language { get; set; } = "en";
     public string? ProviderCourseId { get; set; }

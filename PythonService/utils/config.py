@@ -34,7 +34,7 @@ class Config:
         item.strip()
         for item in os.getenv(
             'EXTERNAL_RESOURCE_DOMAINS',
-            'coursera.org,edx.org,learn.microsoft.com,developer.mozilla.org,youtube.com,www.youtube.com,youtu.be'
+            'coursera.org,edx.org,learn.microsoft.com,developer.mozilla.org,geeksforgeeks.org,w3schools.com,youtube.com,www.youtube.com,youtu.be'
         ).split(',')
         if item.strip()
     ]

@@ -30,6 +30,9 @@ public class AppDbContext : IdentityDbContext<AppUser>
         modelBuilder.Entity<AiRecommendationHistory>()
             .HasIndex(x => new { x.SessionId, x.UserId, x.CreatedAt });
 
+        modelBuilder.Entity<AiRecommendationHistory>()
+            .HasIndex(x => new { x.ContextCourseId, x.UserId, x.CreatedAt });
+
         modelBuilder.Entity<UserCourse>()
             .HasOne(uc => uc.MoodleStudent)
             .WithMany(ms => ms.UserCourses)

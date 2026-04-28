@@ -141,7 +141,7 @@ class UrlValidationService:
         host = parsed.netloc.lower()
         if any(domain in host for domain in ("coursera.org", "edx.org")):
             return "course"
-        if any(domain in host for domain in ("learn.microsoft.com", "developer.mozilla.org")):
+        if any(domain in host for domain in ("learn.microsoft.com", "developer.mozilla.org", "geeksforgeeks.org", "w3schools.com")):
             return "article"
         return "article"
 

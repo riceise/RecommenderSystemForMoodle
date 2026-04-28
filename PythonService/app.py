@@ -57,10 +57,13 @@ def recommend():
             return jsonify({"error": "No JSON data provided"}), 400
 
         req = RecommendationRequest(**data)
-        logger.info("Processing recommendation request for user %s session %s", req.userId, req.sessionId or f"rec-{req.userId}")
+        session_id = req.sessionId or (f"rec-{req.userId}-{req.courseId}" if req.courseId else f"rec-{req.userId}")
+        logger.info("Processing recommendation request for user %s session %s", req.userId, session_id)
 
         weak_topics, strong_topics = [], []
         all_tags = set(req.contextTags)
+        if req.courseName:
+            all_tags.add(req.courseName)
 
         for g in req.moodleGrades:
             raw = g.RawGrade
@@ -78,11 +81,23 @@ def recommend():
         weak_topics = list(dict.fromkeys(weak_topics))
         strong_topics = list(dict.fromkeys(strong_topics))
 
-        if weak_topics and config.WEB_SEARCH_ENABLED:
-            external_course_service.discover_courses_background(weak_topics)
+        search_topics = list(dict.fromkeys(weak_topics + list(all_tags)))[:5]
+        if search_topics and config.WEB_SEARCH_ENABLED:
+            fresh_resources = external_course_service.discover_fresh_candidates(
+                search_topics,
+                timeout_seconds=config.FRESH_DISCOVERY_TIMEOUT_SECONDS,
+            )
+            if fresh_resources:
+                external_course_service.persist_resources(fresh_resources)
+            external_course_service.discover_courses_background(search_topics)
 
-        internal_courses = _select_internal_courses(list(all_tags), weak_topics, limit=2)
-        external_courses = _select_external_courses(list(all_tags), weak_topics, limit=2)
+        internal_courses = _select_internal_courses(list(all_tags), weak_topics, limit=1)
+        external_courses = _select_external_courses(
+            list(all_tags),
+            weak_topics,
+            limit=4 - len(internal_courses),
+            include_course=not internal_courses,
+        )
         combined_courses = internal_courses + external_courses
 
         recommendations = groq_service.generate_hybrid_recommendations(
@@ -90,10 +105,11 @@ def recommend():
             weak_topics=weak_topics,
             strong_topics=strong_topics,
             candidate_courses=combined_courses,
-            session_id=req.sessionId or f"rec-{req.userId}"
+            session_id=session_id,
+            course_name=req.courseName,
         )
 
-        postgres_provider.save_recommendation_history(req.sessionId or f"rec-{req.userId}", req.userId, recommendations)
+        postgres_provider.save_recommendation_history(session_id, req.userId, recommendations, req.courseId)
 
         return jsonify(RecommendationResponseWrapper(userId=req.userId, recommendations=recommendations).model_dump()), 200
 
@@ -126,18 +142,15 @@ def chat():
     try:
         data = request.json or {}
         req = ChatRequest(**data)
-        session_id = req.sessionId or f"chat-{req.userId}"
+        session_id = req.sessionId or (f"chat-{req.userId}-{req.courseId}" if req.courseId else f"chat-{req.userId}")
         logger.info(f"Chat request from user {req.userId}, message: {req.message[:80]}")
 
         if not req.message:
             return jsonify({"error": "message is required"}), 400
 
-        memory = chat_memory.setdefault(session_id, {
-            "messages": [],
-            "recommendations": postgres_provider.get_recent_recommendation_history(session_id, req.userId, limit=6)
-        })
+        memory = chat_memory.setdefault(session_id, {"messages": []})
 
-        prompt = _build_chat_prompt(req.message, req.courseName, req.weakTopics, req.strongTopics, req.recentGradesSummary, memory.get("recommendations", []), memory.get("messages", []))
+        prompt = _build_chat_prompt(req.message, req.courseName, req.weakTopics, req.strongTopics, req.recentGradesSummary, memory.get("messages", []))
 
         response = groq_service.client.chat.completions.create(
             model=groq_service.MODEL,
@@ -191,7 +204,7 @@ def _get_chat_system_prompt() -> str:
 Никогда не выводи свои внутренние рассуждения <think>, давай сразу готовый ответ студенту."""
 
 
-def _build_chat_prompt(message: str, course_name: str, weak: list, strong: list, grades: str, previous_recommendations: list, history: list) -> str:
+def _build_chat_prompt(message: str, course_name: str, weak: list, strong: list, grades: str, history: list) -> str:
     parts = []
     if course_name:
         parts.append(f"Курс: {course_name}.")
@@ -201,9 +214,6 @@ def _build_chat_prompt(message: str, course_name: str, weak: list, strong: list,
         parts.append(f"Сильные темы (оценка > 85%): {', '.join(strong)}")
     if grades:
         parts.append(f"Последние оценки: {grades}")
-    if previous_recommendations:
-        recs_text = "; ".join([f"{r.get('TitleSnapshot', '')}: {r.get('Reason', '')}" for r in previous_recommendations[:4]])
-        parts.append(f"Ранее рекомендованные курсы: {recs_text}")
     if history:
         short_history = " | ".join([f"{m.get('role')}: {m.get('content', '')[:80]}" for m in history[-4:]])
         parts.append(f"Контекст диалога: {short_history}")
@@ -215,7 +225,7 @@ def _build_chat_prompt(message: str, course_name: str, weak: list, strong: list,
 
 def _score_course(course: dict, weak_topics: list[str], all_tags: list[str]) -> float:
     topic_blob = " ".join((course.get("Topics") or []) if isinstance(course.get("Topics"), list) else [str(course.get("Topics") or "")]).lower()
-    title_blob = f"{course.get('Title', '')} {course.get('Description', '')}".lower()
+    title_blob = f"{course.get('Title', '')} {course.get('Description', '')} {course.get('SearchQuery', '')}".lower()
     score = 0.3
     for topic in weak_topics:
         t = topic.lower()
@@ -232,6 +242,9 @@ def _select_internal_courses(all_tags: list[str], weak_topics: list[str], limit:
     courses = postgres_provider.get_internal_courses()
     ranked = []
     for course in courses:
+        score = _score_course(course, weak_topics, all_tags)
+        if (weak_topics or all_tags) and score <= 0.3:
+            continue
         ranked.append({
             "sourceKind": "internal",
             "internalCourseId": str(course.get("Id")),
@@ -241,18 +254,22 @@ def _select_internal_courses(all_tags: list[str], weak_topics: list[str], limit:
             "Difficulty": course.get("Difficulty", "Standard"),
             "Topics": course.get("Topics") or [],
             "Url": None,
-            "RelevanceScore": _score_course(course, weak_topics, all_tags),
+            "ResourceType": "course",
+            "RelevanceScore": score,
         })
     ranked.sort(key=lambda x: x["RelevanceScore"], reverse=True)
     return ranked[:limit]
 
 
-def _select_external_courses(all_tags: list[str], weak_topics: list[str], limit: int = 2) -> list[dict]:
-    courses = postgres_provider.get_external_courses(limit=20)
+def _select_external_courses(all_tags: list[str], weak_topics: list[str], limit: int = 2, include_course: bool = False) -> list[dict]:
+    courses = postgres_provider.get_external_courses(limit=100)
     ranked = []
     for course in courses:
         url = course.get("Url") or ""
+        resource_type = course.get("ResourceType") or "course"
         base_score = _score_course(course, weak_topics, all_tags)
+        if (weak_topics or all_tags) and base_score <= 0.3:
+            continue
         ranked.append({
             "sourceKind": "external",
             "externalCourseId": str(course.get("Id")),
@@ -262,12 +279,34 @@ def _select_external_courses(all_tags: list[str], weak_topics: list[str], limit:
             "Difficulty": course.get("Difficulty", "Standard"),
             "Topics": course.get("Topics") or [],
             "Url": url,
+            "ResourceType": resource_type,
             "RelevanceScore": min(0.99, max(base_score, float(course.get("ConfidenceScore") or 0.0))),
         })
-    if any(_is_specific_external_course_url(item.get("Url", "")) for item in ranked):
-        ranked = [item for item in ranked if _is_specific_external_course_url(item.get("Url", ""))]
+    course_items = [item for item in ranked if item.get("ResourceType") == "course"]
+    if any(_is_specific_external_course_url(item.get("Url", "")) for item in course_items):
+        ranked = [
+            item for item in ranked
+            if item.get("ResourceType") != "course" or _is_specific_external_course_url(item.get("Url", ""))
+        ]
     ranked.sort(key=lambda x: x["RelevanceScore"], reverse=True)
-    return ranked[:limit]
+    selected = _take_by_resource_mix(ranked, include_course=include_course)
+    if len(selected) < limit:
+        used_urls = {item.get("Url") for item in selected}
+        selected.extend([item for item in ranked if item.get("Url") not in used_urls][:limit - len(selected)])
+    return selected[:limit]
+
+
+def _take_by_resource_mix(items: list[dict], include_course: bool = False) -> list[dict]:
+    selected: list[dict] = []
+    used_urls: set[str] = set()
+    targets = [("article", 2), ("video", 1)]
+    if include_course:
+        targets.insert(0, ("course", 1))
+    for resource_type, count in targets:
+        for item in [x for x in items if x.get("ResourceType") == resource_type and x.get("Url") not in used_urls][:count]:
+            selected.append(item)
+            used_urls.add(item.get("Url"))
+    return selected
 
 
 def _is_specific_external_course_url(url: str) -> bool:

@@ -66,6 +66,7 @@ public class PythonAiService : IPythonAiService
     /// </summary>
     public async Task<CourseAnalysisResponseDto?> AnalyzeCourseAsync(
         int moodleUserId,
+        Guid courseId,
         string courseName, 
         List<UserGradeDto> grades,
         List<string> courseTags)
@@ -73,6 +74,7 @@ public class PythonAiService : IPythonAiService
         var requestPayload = new CourseAnalysisRequest
         {
             UserId = moodleUserId,
+            CourseId = courseId,
             CourseName = courseName, 
             Grades = grades.Select(g => new CourseGradeEntry
             {

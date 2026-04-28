@@ -49,6 +49,9 @@ public class ChatContextRequest
     [JsonPropertyName("context")]
     public string Context { get; set; } = "course";
 
+    [JsonPropertyName("courseId")]
+    public Guid? CourseId { get; set; }
+
     [JsonPropertyName("courseName")]
     public string CourseName { get; set; } = string.Empty;
 

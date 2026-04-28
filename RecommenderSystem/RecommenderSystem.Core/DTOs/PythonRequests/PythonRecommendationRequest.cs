@@ -11,6 +11,12 @@ public class PythonRecommendationRequest
     [JsonPropertyName("sessionId")]
     public string SessionId { get; set; } = string.Empty;
 
+    [JsonPropertyName("courseId")]
+    public Guid? CourseId { get; set; }
+
+    [JsonPropertyName("courseName")]
+    public string CourseName { get; set; } = string.Empty;
+
     [JsonPropertyName("contextTags")]
     public List<string> ContextTags { get; set; } = new();
 

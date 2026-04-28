@@ -154,9 +154,12 @@ public class RecommendationsController : ControllerBase
         var chatRequest = new ChatContextRequest
         {
             UserId = moodleUserId.Value,
-            SessionId = string.IsNullOrWhiteSpace(request.SessionId) ? $"chat-{moodleUserId.Value}" : request.SessionId,
+            SessionId = string.IsNullOrWhiteSpace(request.SessionId)
+                ? (request.CourseId.HasValue ? $"chat-{moodleUserId.Value}-{request.CourseId.Value}" : $"chat-{moodleUserId.Value}")
+                : request.SessionId,
             Message = request.Message,
             Context = request.Context,
+            CourseId = request.CourseId,
             CourseName = courseName,
             WeakTopics = weakTopics.Distinct().ToList(),
             StrongTopics = strongTopics.Distinct().ToList(),

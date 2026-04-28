@@ -17,7 +17,6 @@ class GroqService:
         if not api_key:
             raise RuntimeError("GROQ_API_KEY not set in environment")
         self.client = Groq(api_key=api_key)
-        self._cache = {}  
     
     def generate_recommendations(
         self,
@@ -31,11 +30,6 @@ class GroqService:
         
         if not weak_topics and not strong_topics:
             return self._get_fallback_recommendations()
-        
-        cache_key = f"{user_id}:{sorted(weak_topics)}:{sorted(strong_topics)}"
-        if cache_key in self._cache:
-            logger.info(f"Cache hit for user {user_id}")
-            return self._cache[cache_key]
         
         prompt = self._build_prompt(user_id, weak_topics, strong_topics, course_context, max_results)
         
@@ -53,8 +47,6 @@ class GroqService:
             
             result = json.loads(response.choices[0].message.content.strip())
             recommendations = self._normalize_output(result.get("recommendations", []))
-            
-            self._cache[cache_key] = recommendations
             return recommendations
             
         except Exception as e:
@@ -68,11 +60,12 @@ class GroqService:
         strong_topics: List[str],
         candidate_courses: List[Dict[str, Any]],
         session_id: str,
+        course_name: str = "",
     ) -> List[Dict[str, Any]]:
         if not candidate_courses:
             return self._get_fallback_recommendations()
 
-        prompt = self._build_hybrid_prompt(user_id, session_id, weak_topics, strong_topics, candidate_courses)
+        prompt = self._build_hybrid_prompt(user_id, session_id, weak_topics, strong_topics, candidate_courses, course_name)
         try:
             response = self.client.chat.completions.create(
                 model=self.MODEL,
@@ -139,11 +132,12 @@ class GroqService:
 Каждый элемент recommendations должен содержать: internalCourseId, externalCourseId, sourceKind, Title, Description, ResourceType, Url, RelevanceScore, Topics, Difficulty, Reason.
 Description и Reason пиши на русском языке. Нельзя добавлять курсы, которых нет во входном списке."""
 
-    def _build_hybrid_prompt(self, user_id: int, session_id: str, weak: List[str], strong: List[str], candidate_courses: List[Dict[str, Any]]) -> str:
+    def _build_hybrid_prompt(self, user_id: int, session_id: str, weak: List[str], strong: List[str], candidate_courses: List[Dict[str, Any]], course_name: str = "") -> str:
         payload = {
             "student": {
                 "userId": user_id,
                 "sessionId": session_id,
+                "courseName": course_name,
                 "weakTopics": weak,
                 "strongTopics": strong,
             },
@@ -173,7 +167,7 @@ Description и Reason пиши на русском языке. Нельзя до
                 "sourceKind": base.get("sourceKind", item.get("sourceKind", "internal")),
                 "Title": title,
                 "Description": str(item.get("Description", base.get("Description", "")))[:500],
-                "ResourceType": item.get("ResourceType", "course"),
+                "ResourceType": item.get("ResourceType", base.get("ResourceType", "course")),
                 "Url": base.get("Url"),
                 "RelevanceScore": max(0.0, min(1.0, float(item.get("RelevanceScore", base.get("RelevanceScore", 0.5))))),
                 "Topics": base.get("Topics", []),
@@ -195,7 +189,7 @@ Description и Reason пиши на русском языке. Нельзя до
                 "sourceKind": course.get("sourceKind", "internal"),
                 "Title": course.get("Title", "Без названия"),
                 "Description": f"Курс поможет проработать темы: {', '.join(overlap or topics[:3] or ['базовые навыки'])}.",
-                "ResourceType": "course",
+                "ResourceType": course.get("ResourceType", "course"),
                 "Url": course.get("Url"),
                 "RelevanceScore": course.get("RelevanceScore", 0.5),
                 "Topics": topics,

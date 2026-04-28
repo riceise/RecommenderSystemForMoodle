@@ -59,7 +59,7 @@ class PostgresDataProvider:
             }
 
     def get_external_courses(self, limit: int = 20) -> list[dict]:
-        query = text('SELECT "Id", "Title", "Description", "Platform", "Difficulty", "Topics", "Url", "ConfidenceScore" FROM "ExternalCourses" WHERE "IsActive" = true ORDER BY "ConfidenceScore" DESC, "LastParsedAt" DESC LIMIT :limit')
+        query = text('SELECT "Id", "Title", "Description", "Platform", "Difficulty", "Topics", "Url", "ResourceType", "SearchQuery", "ConfidenceScore" FROM "ExternalCourses" WHERE "IsActive" = true ORDER BY "ConfidenceScore" DESC, "LastParsedAt" DESC LIMIT :limit')
         with self.engine.connect() as connection:
             rows = connection.execute(query, {"limit": limit}).mappings().all()
             return [dict(row) for row in rows]
@@ -72,9 +72,9 @@ class PostgresDataProvider:
 
         upsert_sql = text('''
             INSERT INTO "ExternalCourses"
-            ("Id", "Title", "Description", "Platform", "Url", "Difficulty", "Topics", "Language", "ProviderCourseId", "SearchQuery", "DiscoveryMethod", "ConfidenceScore", "IsActive", "LastParsedAt", "CreatedAt", "UpdatedAt", "MetadataJson")
+            ("Id", "Title", "Description", "Platform", "Url", "Difficulty", "Topics", "Language", "ProviderCourseId", "ResourceType", "SearchQuery", "DiscoveryMethod", "ConfidenceScore", "IsActive", "LastParsedAt", "CreatedAt", "UpdatedAt", "MetadataJson")
             VALUES
-            (:id, :title, :description, :platform, :url, :difficulty, CAST(:topics AS jsonb), :language, :provider_course_id, :search_query, :discovery_method, :confidence_score, true, NOW(), NOW(), NOW(), :metadata_json)
+            (:id, :title, :description, :platform, :url, :difficulty, CAST(:topics AS jsonb), :language, :provider_course_id, :resource_type, :search_query, :discovery_method, :confidence_score, true, NOW(), NOW(), NOW(), :metadata_json)
             ON CONFLICT ("Url")
             DO UPDATE SET
                 "Title" = EXCLUDED."Title",
@@ -84,6 +84,7 @@ class PostgresDataProvider:
                 "Topics" = EXCLUDED."Topics",
                 "Language" = EXCLUDED."Language",
                 "ProviderCourseId" = EXCLUDED."ProviderCourseId",
+                "ResourceType" = EXCLUDED."ResourceType",
                 "SearchQuery" = EXCLUDED."SearchQuery",
                 "DiscoveryMethod" = EXCLUDED."DiscoveryMethod",
                 "ConfidenceScore" = EXCLUDED."ConfidenceScore",
@@ -109,6 +110,7 @@ class PostgresDataProvider:
                     "topics": json.dumps(course.get("topics", []), ensure_ascii=False),
                     "language": course.get("language", "en"),
                     "provider_course_id": course.get("provider_course_id"),
+                    "resource_type": course.get("resource_type", "course"),
                     "search_query": course.get("search_query", ""),
                     "discovery_method": course.get("discovery_method", "ollama_search"),
                     "confidence_score": float(course.get("confidence_score", 0.0)),
@@ -124,10 +126,10 @@ class PostgresDataProvider:
         with self.engine.begin() as connection:
             connection.execute(query, {"url": url})
 
-    def save_recommendation_history(self, session_id: str, user_id: int, recommendations: list[dict]) -> None:
+    def save_recommendation_history(self, session_id: str, user_id: int, recommendations: list[dict], context_course_id: str | None = None) -> None:
         if not recommendations:
             return
-        insert_sql = text('INSERT INTO "AiRecommendationHistory" ("Id", "SessionId", "UserId", "SourceKind", "InternalCourseId", "ExternalCourseId", "TitleSnapshot", "Reason", "RelevanceScore", "CreatedAt") VALUES (:id, :session_id, :user_id, :source_kind, :internal_course_id, :external_course_id, :title_snapshot, :reason, :relevance_score, NOW())')
+        insert_sql = text('INSERT INTO "AiRecommendationHistory" ("Id", "SessionId", "UserId", "ContextCourseId", "SourceKind", "InternalCourseId", "ExternalCourseId", "TitleSnapshot", "Reason", "RelevanceScore", "CreatedAt") VALUES (:id, :session_id, :user_id, :context_course_id, :source_kind, :internal_course_id, :external_course_id, :title_snapshot, :reason, :relevance_score, NOW())')
         import uuid
         with self.engine.begin() as connection:
             for rec in recommendations:
@@ -135,6 +137,7 @@ class PostgresDataProvider:
                     "id": str(uuid.uuid4()),
                     "session_id": session_id,
                     "user_id": user_id,
+                    "context_course_id": context_course_id,
                     "source_kind": rec.get("sourceKind", "internal"),
                     "internal_course_id": rec.get("internalCourseId"),
                     "external_course_id": rec.get("externalCourseId"),

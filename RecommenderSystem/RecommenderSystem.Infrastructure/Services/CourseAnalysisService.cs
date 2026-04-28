@@ -91,7 +91,7 @@ public class CourseAnalysisService : ICourseAnalysisService
             courseTags = courseTags.Concat(course.Topics).Distinct().ToList();
         }
 
-        var pythonResult = await _pythonAiService.AnalyzeCourseAsync(moodleUserId, course.Title, assignmentGrades, courseTags);
+        var pythonResult = await _pythonAiService.AnalyzeCourseAsync(moodleUserId, courseId, course.Title, assignmentGrades, courseTags);
 
         if (pythonResult != null)
         {

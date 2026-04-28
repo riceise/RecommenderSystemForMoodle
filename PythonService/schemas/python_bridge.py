@@ -10,6 +10,8 @@ class MoodleGradeInput(BaseModel):
 class RecommendationRequest(BaseModel):
     userId: int
     sessionId: str = ""
+    courseId: Optional[str] = None
+    courseName: str = ""
     contextTags: List[str] = Field(default_factory=list)
     moodleGrades: List[MoodleGradeInput]
 
@@ -36,6 +38,7 @@ class ChatRequest(BaseModel):
     sessionId: str = ""
     message: str
     context: str = "course"
+    courseId: Optional[str] = None
     courseName: str = ""
     weakTopics: List[str] = Field(default_factory=list)
     strongTopics: List[str] = Field(default_factory=list)

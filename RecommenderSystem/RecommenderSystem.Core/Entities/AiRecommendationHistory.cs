@@ -5,6 +5,7 @@ public class AiRecommendationHistory
     public Guid Id { get; set; }
     public string SessionId { get; set; } = string.Empty;
     public int UserId { get; set; }
+    public Guid? ContextCourseId { get; set; }
     public string SourceKind { get; set; } = "internal";
     public Guid? InternalCourseId { get; set; }
     public Course? InternalCourse { get; set; }
