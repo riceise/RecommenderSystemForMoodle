@@ -65,6 +65,7 @@ def recommend():
         if req.courseName:
             all_tags.add(req.courseName)
 
+        has_grade_data = False
         for g in req.moodleGrades:
             raw = g.RawGrade
             max_g = g.MaxGrade
@@ -72,6 +73,7 @@ def recommend():
             all_tags.update(g.CourseTags)
 
             if raw is not None and max_g and float(max_g) > 0:
+                has_grade_data = True
                 ratio = float(raw) / float(max_g)
                 if ratio < 0.6:
                     weak_topics.append(item_name)
@@ -80,24 +82,19 @@ def recommend():
 
         weak_topics = list(dict.fromkeys(weak_topics))
         strong_topics = list(dict.fromkeys(strong_topics))
+        if not has_grade_data and not weak_topics:
+            weak_topics = list(dict.fromkeys([tag for tag in all_tags if str(tag).strip()]))
 
-        search_topics = list(dict.fromkeys(weak_topics + list(all_tags)))[:5]
-        if search_topics and config.WEB_SEARCH_ENABLED:
-            fresh_resources = external_course_service.discover_fresh_candidates(
-                search_topics,
-                timeout_seconds=config.FRESH_DISCOVERY_TIMEOUT_SECONDS,
-            )
-            if fresh_resources:
-                external_course_service.persist_resources(fresh_resources)
-            external_course_service.discover_courses_background(search_topics)
+        search_topics = list(dict.fromkeys(weak_topics + list(all_tags)))
+        external_courses = external_course_service.discover_and_load_relevant_resources(
+            search_topics,
+            course_name=req.courseName,
+            weak_topics=weak_topics,
+            improvement_topics=[],
+            course_tags=list(all_tags),
+        )
 
         internal_courses = _select_internal_courses(list(all_tags), weak_topics, limit=1)
-        external_courses = _select_external_courses(
-            list(all_tags),
-            weak_topics,
-            limit=4 - len(internal_courses),
-            include_course=not internal_courses,
-        )
         combined_courses = internal_courses + external_courses
 
         recommendations = groq_service.generate_hybrid_recommendations(
@@ -259,59 +256,6 @@ def _select_internal_courses(all_tags: list[str], weak_topics: list[str], limit:
         })
     ranked.sort(key=lambda x: x["RelevanceScore"], reverse=True)
     return ranked[:limit]
-
-
-def _select_external_courses(all_tags: list[str], weak_topics: list[str], limit: int = 2, include_course: bool = False) -> list[dict]:
-    courses = postgres_provider.get_external_courses(limit=100)
-    ranked = []
-    for course in courses:
-        url = course.get("Url") or ""
-        resource_type = course.get("ResourceType") or "course"
-        base_score = _score_course(course, weak_topics, all_tags)
-        if (weak_topics or all_tags) and base_score <= 0.3:
-            continue
-        ranked.append({
-            "sourceKind": "external",
-            "externalCourseId": str(course.get("Id")),
-            "Title": course.get("Title", ""),
-            "Description": course.get("Description", ""),
-            "Platform": course.get("Platform", "External"),
-            "Difficulty": course.get("Difficulty", "Standard"),
-            "Topics": course.get("Topics") or [],
-            "Url": url,
-            "ResourceType": resource_type,
-            "RelevanceScore": min(0.99, max(base_score, float(course.get("ConfidenceScore") or 0.0))),
-        })
-    course_items = [item for item in ranked if item.get("ResourceType") == "course"]
-    if any(_is_specific_external_course_url(item.get("Url", "")) for item in course_items):
-        ranked = [
-            item for item in ranked
-            if item.get("ResourceType") != "course" or _is_specific_external_course_url(item.get("Url", ""))
-        ]
-    ranked.sort(key=lambda x: x["RelevanceScore"], reverse=True)
-    selected = _take_by_resource_mix(ranked, include_course=include_course)
-    if len(selected) < limit:
-        used_urls = {item.get("Url") for item in selected}
-        selected.extend([item for item in ranked if item.get("Url") not in used_urls][:limit - len(selected)])
-    return selected[:limit]
-
-
-def _take_by_resource_mix(items: list[dict], include_course: bool = False) -> list[dict]:
-    selected: list[dict] = []
-    used_urls: set[str] = set()
-    targets = [("article", 2), ("video", 1)]
-    if include_course:
-        targets.insert(0, ("course", 1))
-    for resource_type, count in targets:
-        for item in [x for x in items if x.get("ResourceType") == resource_type and x.get("Url") not in used_urls][:count]:
-            selected.append(item)
-            used_urls.add(item.get("Url"))
-    return selected
-
-
-def _is_specific_external_course_url(url: str) -> bool:
-    lowered = (url or "").lower()
-    return any(path in lowered for path in ("/learn/", "/specializations/", "/professional-certificates/", "/xseries/", "/certificates/"))
 
 
 if __name__ == '__main__':

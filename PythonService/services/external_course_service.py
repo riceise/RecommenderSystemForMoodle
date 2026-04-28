@@ -4,6 +4,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from data.postgres_provider import PostgresDataProvider
+from services.external_resource_ranker_service import ExternalResourceRankerService
 from services.ollama_service import OllamaService
 from services.search_service import SearchService
 from services.url_validation_service import UrlValidationService
@@ -19,6 +20,7 @@ class ExternalCourseService:
         self.ollama = OllamaService()
         self.search = SearchService()
         self.validator = UrlValidationService()
+        self.ranker = ExternalResourceRankerService()
 
     def discover_courses(self, weak_topics: list[str], force_refresh: bool = False) -> dict[str, Any]:
         if not config.WEB_SEARCH_ENABLED:
@@ -32,6 +34,35 @@ class ExternalCourseService:
             "queries": list(dict.fromkeys([item.get("SearchQuery", "") for item in resources if item.get("SearchQuery")])),
             "results": selected,
         }
+
+    def discover_and_load_relevant_resources(
+        self,
+        topics: list[str],
+        course_name: str = "",
+        weak_topics: list[str] | None = None,
+        improvement_topics: list[str] | None = None,
+        course_tags: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        clean_topics = list(dict.fromkeys([str(topic).strip() for topic in topics if str(topic).strip()]))
+        if not clean_topics:
+            return []
+
+        cached_before = self._load_relevant_cached_resources(clean_topics)
+        fresh_resources = self.discover_resources(clean_topics) if config.WEB_SEARCH_ENABLED else []
+        if fresh_resources:
+            saved = self.persist_resources(fresh_resources)
+            logger.info("Synchronous external discovery saved %s resources for topics=%s", saved, clean_topics)
+
+        cached_after = self._load_relevant_cached_resources(clean_topics)
+        merged = self._merge_and_rank_resources(cached_after + fresh_resources + cached_before, clean_topics)
+        return self.ranker.rank_resources(
+            course_name=course_name,
+            weak_topics=weak_topics or [],
+            improvement_topics=improvement_topics or [],
+            course_tags=course_tags or [],
+            candidates=merged,
+            max_results=5,
+        )
 
     def discover_resources(self, weak_topics: list[str]) -> list[dict[str, Any]]:
         if not config.WEB_SEARCH_ENABLED:
@@ -105,9 +136,10 @@ class ExternalCourseService:
 
         _discovery_executor.submit(_run)
 
-    def _build_resource_queries(self, weak_topics: list[str], max_queries: int = 3) -> list[str]:
+    def _build_resource_queries(self, weak_topics: list[str], max_queries: int | None = None) -> list[str]:
         queries = []
-        for topic in weak_topics[:max_queries]:
+        topics = weak_topics[:max_queries] if max_queries else weak_topics
+        for topic in topics:
             topic_text = str(topic).strip()
             if not topic_text:
                 continue
@@ -176,9 +208,9 @@ class ExternalCourseService:
             "Language": "en",
             "ProviderCourseId": None,
             "ConfidenceScore": confidence,
-            "Metadata": {"source": "searxng_fallback", "search_result": item},
+            "Metadata": {"source": "searxng_sync", "search_result": item},
             "SearchQuery": query,
-            "DiscoveryMethod": "searxng_fallback",
+            "DiscoveryMethod": "searxng_sync",
         }
 
     def _select_persistable_resources(self, resources: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -226,6 +258,159 @@ class ExternalCourseService:
             "search_query": item.get("SearchQuery", ""),
             "discovery_method": item.get("DiscoveryMethod", "searxng_fallback"),
         }
+
+    def _load_relevant_cached_resources(self, topics: list[str]) -> list[dict[str, Any]]:
+        try:
+            rows = self.postgres.get_external_courses_for_topics(topics, limit=80)
+            if len(rows) < 20:
+                seen_urls = {row.get("Url") for row in rows}
+                rows.extend([row for row in self.postgres.get_external_courses(limit=120) if row.get("Url") not in seen_urls])
+        except Exception as ex:
+            logger.warning("Failed to load relevant cached external resources: %s", ex)
+            return []
+        return [self._from_db_course(row, topics) for row in rows]
+
+    def _from_db_course(self, row: dict[str, Any], topics: list[str]) -> dict[str, Any]:
+        score = self._resource_relevance_score(row, topics)
+        return {
+            "sourceKind": "external",
+            "externalCourseId": str(row.get("Id")) if row.get("Id") else None,
+            "Title": row.get("Title", ""),
+            "Description": row.get("Description", ""),
+            "Platform": row.get("Platform", "External"),
+            "Difficulty": row.get("Difficulty", "Standard"),
+            "Topics": row.get("Topics") or [],
+            "Url": row.get("Url"),
+            "ResourceType": row.get("ResourceType") or "course",
+            "RelevanceScore": score,
+            "ConfidenceScore": max(score, float(row.get("ConfidenceScore") or 0.0)),
+            "SearchQuery": row.get("SearchQuery", ""),
+        }
+
+    def _merge_and_rank_resources(self, resources: list[dict[str, Any]], topics: list[str]) -> list[dict[str, Any]]:
+        deduped: dict[str, dict[str, Any]] = {}
+        for item in resources:
+            normalized_url = self.validator.normalize_url(item.get("Url"))
+            if not normalized_url:
+                continue
+
+            score = self._resource_relevance_score(item, topics)
+            if score <= 0.0:
+                continue
+
+            normalized = {
+                "sourceKind": "external",
+                "externalCourseId": item.get("externalCourseId"),
+                "Title": item.get("Title", ""),
+                "Description": item.get("Description", ""),
+                "Platform": item.get("Platform", "External"),
+                "Difficulty": item.get("Difficulty", "Standard"),
+                "Topics": item.get("Topics") or [],
+                "Url": normalized_url,
+                "ResourceType": item.get("ResourceType") or "article",
+                "RelevanceScore": score,
+                "ConfidenceScore": max(score, float(item.get("ConfidenceScore") or 0.0)),
+                "SearchQuery": item.get("SearchQuery", ""),
+            }
+
+            existing = deduped.get(normalized_url)
+            if not existing or normalized["RelevanceScore"] > existing.get("RelevanceScore", 0):
+                deduped[normalized_url] = normalized
+
+        ranked = list(deduped.values())
+        ranked.sort(key=lambda item: (item.get("RelevanceScore", 0), self._url_priority(item.get("Url"))), reverse=True)
+        return ranked
+
+    def _select_recommendation_mix(self, resources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        selected: list[dict[str, Any]] = []
+        used_urls: set[str] = set()
+        targets = [("article", 2), ("course", 2), ("video", 1)]
+
+        for resource_type, count in targets:
+            for item in [x for x in resources if x.get("ResourceType") == resource_type]:
+                if len([x for x in selected if x.get("ResourceType") == resource_type]) >= count:
+                    break
+                url = item.get("Url")
+                if not url or url in used_urls:
+                    continue
+                selected.append(item)
+                used_urls.add(url)
+
+        if len(selected) < 4:
+            for item in resources:
+                url = item.get("Url")
+                if not url or url in used_urls:
+                    continue
+                selected.append(item)
+                used_urls.add(url)
+                if len(selected) >= 5:
+                    break
+
+        return selected[:5]
+
+    def _is_allowed_course_candidate(self, item: dict[str, Any], url: str, score: float, has_specific_course: bool, topics: list[str]) -> bool:
+        return True
+
+    def _requires_stack_match(self, topics: list[str]) -> bool:
+        return False
+
+    def _has_learning_topic_match(self, text: str, topics: list[str]) -> bool:
+        return False
+
+    @staticmethod
+    def _is_catalog_course_url(url: str | None) -> bool:
+        parsed = urlparse(url or "")
+        host = parsed.netloc.lower()
+        path = parsed.path.lower()
+        return any(domain in host for domain in ("coursera.org", "edx.org")) and (
+            path in {"", "/"}
+            or path.startswith("/courses")
+            or path.startswith("/search")
+            or path.startswith("/browse")
+        )
+
+    @staticmethod
+    def _url_priority(url: str | None) -> float:
+        parsed = urlparse(url or "")
+        path = parsed.path.lower()
+        if any(path.startswith(prefix) for prefix in ("/learn/", "/specializations/", "/professional-certificates/", "/xseries/", "/certificates/")):
+            return 0.3
+        if path.startswith(("/courses", "/search", "/browse")):
+            return 0.15
+        return 0.0
+
+    def _resource_relevance_score(self, item: dict[str, Any], topics: list[str]) -> float:
+        text = self._resource_text(item)
+        score = float(item.get("ConfidenceScore") or item.get("RelevanceScore") or 0.25)
+        for topic in topics:
+            normalized_topic = str(topic).strip().lower()
+            if normalized_topic and normalized_topic in text:
+                score += 0.3
+                continue
+            tokens = [token for token in normalized_topic.split() if len(token) >= 4]
+            token_matches = sum(1 for token in tokens if token in text)
+            if tokens and token_matches >= max(1, len(tokens) // 2):
+                score += min(0.25, 0.08 * token_matches)
+        return min(score, 0.99)
+
+    @staticmethod
+    def _resource_text(item: dict[str, Any]) -> str:
+        fields = [
+            item.get("Title", ""),
+            item.get("Description", ""),
+            item.get("SearchQuery", ""),
+            " ".join(item.get("Topics") or []) if isinstance(item.get("Topics"), list) else str(item.get("Topics") or ""),
+        ]
+        return " ".join(str(field).lower() for field in fields)
+
+    @staticmethod
+    def _resource_visible_text(item: dict[str, Any]) -> str:
+        fields = [
+            item.get("Title", ""),
+            item.get("Description", ""),
+            item.get("Url", ""),
+        ]
+        return " ".join(str(field).lower() for field in fields)
 
     def _confidence_for_url(self, url: str, resource_type: str) -> float:
         if resource_type == "video":

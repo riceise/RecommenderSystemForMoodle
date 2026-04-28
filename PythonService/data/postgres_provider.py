@@ -64,6 +64,52 @@ class PostgresDataProvider:
             rows = connection.execute(query, {"limit": limit}).mappings().all()
             return [dict(row) for row in rows]
 
+    def get_external_courses_for_topics(self, topics: list[str], limit: int = 30) -> list[dict]:
+        clean_topics = []
+        for topic in topics:
+            normalized = str(topic).strip().lower()
+            if not normalized:
+                continue
+            clean_topics.append(normalized)
+        clean_topics = list(dict.fromkeys(clean_topics))
+        if not clean_topics:
+            return []
+
+        clauses = []
+        parameters = {"limit": limit}
+        for index, topic in enumerate(clean_topics):
+            param = f"topic_{index}"
+            parameters[param] = f"%{topic}%"
+            topic_clauses = [
+                f'LOWER("Title") LIKE :{param}',
+                f'LOWER("Description") LIKE :{param}',
+                f'LOWER("SearchQuery") LIKE :{param}',
+                f'LOWER("Topics"::text) LIKE :{param}',
+            ]
+            for token_index, token in enumerate([part for part in topic.split() if len(part) >= 4][:4]):
+                token_param = f"topic_{index}_token_{token_index}"
+                parameters[token_param] = f"%{token}%"
+                topic_clauses.extend([
+                    f'LOWER("Title") LIKE :{token_param}',
+                    f'LOWER("Description") LIKE :{token_param}',
+                    f'LOWER("SearchQuery") LIKE :{token_param}',
+                    f'LOWER("Topics"::text) LIKE :{token_param}',
+                ])
+            clauses.append(f"({' OR '.join(topic_clauses)})")
+
+        query = text(f'''
+            SELECT "Id", "Title", "Description", "Platform", "Difficulty", "Topics",
+                   "Url", "ResourceType", "SearchQuery", "ConfidenceScore"
+            FROM "ExternalCourses"
+            WHERE "IsActive" = true
+              AND ({' OR '.join(clauses)})
+            ORDER BY "ConfidenceScore" DESC, "LastParsedAt" DESC
+            LIMIT :limit
+        ''')
+        with self.engine.connect() as connection:
+            rows = connection.execute(query, parameters).mappings().all()
+            return [dict(row) for row in rows]
+
     def upsert_external_courses(self, courses: list[dict]) -> int:
         if not courses:
             return 0

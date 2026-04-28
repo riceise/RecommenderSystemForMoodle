@@ -35,13 +35,22 @@ class CourseAnalysisGroqService:
         self.url_validator = UrlValidationService()
 
     def analyze(self, request: CourseAnalysisRequest) -> CourseAnalysisResponse:
-        weak_topics, strong_topics, all_topics = self._analyze_grades(request.grades, request.courseTags)
+        weak_topics, improvement_topics, strong_topics, all_topics = self._analyze_grades(request.grades, request.courseTags)
+        search_topics = list(dict.fromkeys(weak_topics + improvement_topics + (request.courseTags or []) + [request.courseName]))
 
         if not request.grades:
             logger.warning("No grades provided for user %s, course %s", request.userId, request.courseId)
-            return self._build_fallback_response()
+            weak_topics = list(dict.fromkeys([topic for topic in request.courseTags if str(topic).strip()]))
+            search_topics = weak_topics
+            all_topics = list(dict.fromkeys((request.courseTags or []) + [request.courseName]))
 
-        external_candidates = self._discover_external_courses(weak_topics, request.courseTags)
+        external_candidates = self._discover_external_courses(
+            search_topics,
+            course_name=request.courseName,
+            weak_topics=weak_topics,
+            improvement_topics=improvement_topics,
+            course_tags=request.courseTags,
+        )
 
         try:
             prompt = self._build_prompt(
@@ -59,6 +68,7 @@ class CourseAnalysisGroqService:
                 model=self.MODEL,
                 messages=[
                     {"role": "system", "content": self._get_system_prompt()},
+                    {"role": "system", "content": "Return recommendations only when their Url exactly matches one of the found external resources. If no suitable URL exists, omit that recommendation instead of inventing an article, exercise, course, or URL."},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
@@ -80,8 +90,9 @@ class CourseAnalysisGroqService:
         self,
         grades: List[Any],
         course_tags: List[str],
-    ) -> Tuple[List[str], List[str], List[str]]:
+    ) -> Tuple[List[str], List[str], List[str], List[str]]:
         weak: list[str] = []
+        improvement: list[str] = []
         strong: list[str] = []
         all_topics: set[str] = set(course_tags)
 
@@ -99,15 +110,12 @@ class CourseAnalysisGroqService:
 
             if ratio < self.WEAK_THRESHOLD:
                 weak.append(item_name)
-            elif ratio > self.STRONG_THRESHOLD:
+            elif ratio < self.STRONG_THRESHOLD:
+                improvement.append(item_name)
+            else:
                 strong.append(item_name)
 
-        if course_tags and weak:
-            weak = list(set(course_tags))
-        if course_tags and strong:
-            strong = list(set(course_tags))
-
-        return list(set(weak)), list(set(strong)), list(all_topics)
+        return list(dict.fromkeys(weak)), list(dict.fromkeys(improvement)), list(dict.fromkeys(strong)), list(all_topics)
 
     def _get_system_prompt(self) -> str:
         return """Ты — AI-ассистент образовательной платформы RecommenderSystem.
@@ -152,7 +160,7 @@ class CourseAnalysisGroqService:
         grades_text = "\n".join(grades_summary) if grades_summary else "  (нет данных)"
 
         external_text = []
-        for course in external_candidates[:4]:
+        for course in external_candidates[:5]:
             external_text.append(
                 f"  - {course.get('Title', 'Без названия')} | {course.get('ResourceType', 'course')} | {course.get('Platform', 'External')} | {course.get('Difficulty', 'Standard')} | {', '.join(course.get('Topics', [])[:5])} | {course.get('Url', '')}"
             )
@@ -213,14 +221,15 @@ class CourseAnalysisGroqService:
                         continue
                 else:
                     candidate = allowed_by_title.get(str(item.get("Title", "")).strip().lower())
+                    if not candidate:
+                        continue
 
-                source_kind = "external" if candidate else "internal"
-                url = candidate.get("Url") if candidate else None
-                resource_type = candidate.get("ResourceType") if candidate else item.get("ResourceType", "article")
-                if resource_type == "video" and not candidate:
+                url = candidate.get("Url")
+                if not url:
                     continue
+                resource_type = candidate.get("ResourceType") or item.get("ResourceType", "article")
                 rec = RecommendationItem(
-                    SourceKind=source_kind,
+                    SourceKind="external",
                     Title=str(item.get("Title") or (candidate or {}).get("Title") or "Без названия")[:200],
                     Description=str(item.get("Description") or (candidate or {}).get("Description") or "")[:500],
                     ResourceType=resource_type if resource_type in valid_types else "article",
@@ -233,10 +242,7 @@ class CourseAnalysisGroqService:
                 logger.warning("Skip malformed recommendation item: %s", e)
                 continue
 
-        if external_candidates:
-            external_recs = [rec for rec in recommendations if rec.Url]
-            internal_recs = [rec for rec in recommendations if not rec.Url]
-            recommendations = external_recs + internal_recs[:2]
+        recommendations = [rec for rec in recommendations if rec.Url]
 
         used_urls = {rec.Url for rec in recommendations if rec.Url}
         for fallback in self._build_external_fallback_recommendations(external_candidates):
@@ -258,20 +264,7 @@ class CourseAnalysisGroqService:
         )
 
     def _build_fallback_response(self, external_candidates: List[Dict[str, Any]] | None = None) -> CourseAnalysisResponse:
-        fallback_recommendations = [
-            RecommendationItem(
-                SourceKind="internal",
-                Title="Повторите материалы курса",
-                Description="Пересмотрите лекции и выполните практические задания. Обратитесь к преподавателю за консультацией.",
-                ResourceType="article",
-                Url=None,
-                RelevanceScore=0.5,
-                Difficulty="Standard",
-            )
-        ]
-
-        if external_candidates:
-            fallback_recommendations.extend(self._build_external_fallback_recommendations(external_candidates)[:2])
+        fallback_recommendations = self._build_external_fallback_recommendations(external_candidates or [])
 
         return CourseAnalysisResponse(
             Analysis="Не удалось выполнить AI-анализ. Сервис временно недоступен. Попробуйте повторить запрос позже.",
@@ -280,68 +273,25 @@ class CourseAnalysisGroqService:
             Recommendations=fallback_recommendations,
         )
 
-    def _discover_external_courses(self, weak_topics: List[str], course_tags: List[str]) -> List[Dict[str, Any]]:
-        search_topics = list(dict.fromkeys((weak_topics or []) + (course_tags or [])))[:5]
+    def _discover_external_courses(
+        self,
+        search_topics: List[str],
+        course_name: str = "",
+        weak_topics: List[str] | None = None,
+        improvement_topics: List[str] | None = None,
+        course_tags: List[str] | None = None,
+    ) -> List[Dict[str, Any]]:
+        search_topics = list(dict.fromkeys(search_topics or []))
         if not search_topics:
             return []
 
-        fresh_candidates = self.external_course_service.discover_fresh_candidates(
+        return self.external_course_service.discover_and_load_relevant_resources(
             search_topics,
-            timeout_seconds=config.FRESH_DISCOVERY_TIMEOUT_SECONDS,
+            course_name=course_name,
+            weak_topics=weak_topics or [],
+            improvement_topics=improvement_topics or [],
+            course_tags=course_tags or [],
         )
-        if fresh_candidates:
-            self.external_course_service.persist_resources(fresh_candidates)
-        self.external_course_service.discover_courses_background(search_topics)
-
-        try:
-            candidates = self.postgres_provider.get_external_courses(limit=10)
-        except Exception as ex:
-            logger.warning("Failed to load cached external courses during course analysis: %s", ex)
-            return []
-        ranked = []
-        for course in fresh_candidates:
-            ranked.append({
-                "Title": course.get("Title", ""),
-                "Description": course.get("Description", ""),
-                "Platform": course.get("Platform", "External"),
-                "Difficulty": course.get("Difficulty", "Standard"),
-                "Topics": course.get("Topics") or [],
-                "Url": course.get("Url"),
-                "ResourceType": course.get("ResourceType", "article"),
-                "RelevanceScore": max(float(course.get("RelevanceScore") or 0.0), self._score_external_course(course, search_topics)),
-            })
-
-        for course in candidates:
-            score = self._score_external_course(course, search_topics)
-            if score <= 0.2:
-                continue
-            ranked.append({
-                "Title": course.get("Title", ""),
-                "Description": course.get("Description", ""),
-                "Platform": course.get("Platform", "External"),
-                "Difficulty": course.get("Difficulty", "Standard"),
-                "Topics": course.get("Topics") or [],
-                "Url": course.get("Url"),
-                "ResourceType": course.get("ResourceType", "course"),
-                "RelevanceScore": score,
-            })
-
-        deduped = {}
-        for item in ranked:
-            normalized_url = self.url_validator.normalize_url(item.get("Url"))
-            if not normalized_url:
-                continue
-            if normalized_url not in deduped or item.get("RelevanceScore", 0) > deduped[normalized_url].get("RelevanceScore", 0):
-                deduped[normalized_url] = item
-        ranked = list(deduped.values())
-        if any(self.url_validator.is_specific_course_url(item.get("Url")) for item in ranked):
-            ranked = [
-                item for item in ranked
-                if item.get("ResourceType") != "course"
-                or self.url_validator.is_specific_course_url(item.get("Url"))
-            ]
-        ranked.sort(key=lambda x: x.get("RelevanceScore", 0), reverse=True)
-        return ranked[:6]
 
     def _score_external_course(self, course: Dict[str, Any], topics: List[str]) -> float:
         text = f"{course.get('Title', '')} {course.get('Description', '')} {' '.join(course.get('Topics') or [])}".lower()
@@ -353,7 +303,9 @@ class CourseAnalysisGroqService:
 
     def _build_external_fallback_recommendations(self, external_candidates: List[Dict[str, Any]]) -> List[RecommendationItem]:
         results: List[RecommendationItem] = []
-        for course in external_candidates[:3]:
+        for course in external_candidates[:5]:
+            if not course.get("Url"):
+                continue
             results.append(RecommendationItem(
                 SourceKind="external",
                 Title=str(course.get("Title", "Внешний ресурс"))[:200],

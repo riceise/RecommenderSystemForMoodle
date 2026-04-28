@@ -127,7 +127,7 @@ class GroqService:
         return result
 
     def _get_hybrid_system_prompt(self) -> str:
-        return """Ты — AI-ассистент NeuroTutor. Твоя задача — не придумывать новые курсы, а объяснять уже подобранные 4 курса.
+        return """Ты — AI-ассистент NeuroTutor. Твоя задача — не придумывать новые ссылки, а объяснять уже подобранные ресурсы.
 Отвечай ТОЛЬКО JSON-объектом с ключом recommendations.
 Каждый элемент recommendations должен содержать: internalCourseId, externalCourseId, sourceKind, Title, Description, ResourceType, Url, RelevanceScore, Topics, Difficulty, Reason.
 Description и Reason пиши на русском языке. Нельзя добавлять курсы, которых нет во входном списке."""
@@ -176,11 +176,11 @@ Description и Reason пиши на русском языке. Нельзя до
             })
         if not normalized:
             return self._build_template_recommendations(candidate_courses, [])
-        return normalized[:4]
+        return normalized[:5]
 
     def _build_template_recommendations(self, candidate_courses: List[Dict[str, Any]], weak_topics: List[str]) -> List[Dict[str, Any]]:
         result = []
-        for course in candidate_courses[:4]:
+        for course in candidate_courses[:5]:
             topics = course.get("Topics", []) or []
             overlap = [topic for topic in weak_topics if topic.lower() in " ".join([str(t).lower() for t in topics])]
             result.append({
