@@ -5,10 +5,12 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - BASE_URL=http://localhost:8080/
+      - SEARXNG_BASE_URL=http://localhost:8080/
+      - SEARXNG_LIMITER=false
       - INSTANCE_NAME=NeuroTutor Search
     volumes:
       - searxng-data:/etc/searxng
+      - ./searxng/settings.yml:/etc/searxng/settings.yml
     restart: unless-stopped
 
 volumes:

@@ -12,6 +12,8 @@ from schemas.course_analysis import (
 )
 from data.postgres_provider import PostgresDataProvider
 from services.external_course_service import ExternalCourseService
+from services.url_validation_service import UrlValidationService
+from utils.config import config
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -30,6 +32,7 @@ class CourseAnalysisGroqService:
         self.client = Groq(api_key=api_key)
         self.external_course_service = ExternalCourseService()
         self.postgres_provider = PostgresDataProvider()
+        self.url_validator = UrlValidationService()
 
     def analyze(self, request: CourseAnalysisRequest) -> CourseAnalysisResponse:
         weak_topics, strong_topics, all_topics = self._analyze_grades(request.grades, request.courseTags)
@@ -121,7 +124,7 @@ class CourseAnalysisGroqService:
    - "Title" (string): название ресурса
    - "Description" (string): краткое описание НА РУССКОМ, КАК ИМЕННО это поможет
    - "ResourceType" (string): один из "article", "video", "course", "exercise"
-   - "Url" (string или null): ссылка на ресурс (если есть)
+   - "Url" (string или null): используй ТОЛЬКО ссылки, которые есть во входном блоке "Найденные внешние ресурсы". Не придумывай YouTube, статьи или курсы.
    - "RelevanceScore" (number от 0.0 до 1.0): релевантность
    - "Difficulty" (string): один из "Beginner", "Standard", "Advanced"
 
@@ -151,9 +154,9 @@ class CourseAnalysisGroqService:
         external_text = []
         for course in external_candidates[:4]:
             external_text.append(
-                f"  - {course.get('Title', 'Без названия')} | {course.get('Platform', 'External')} | {course.get('Difficulty', 'Standard')} | {', '.join(course.get('Topics', [])[:5])} | {course.get('Url', '')}"
+                f"  - {course.get('Title', 'Без названия')} | {course.get('ResourceType', 'course')} | {course.get('Platform', 'External')} | {course.get('Difficulty', 'Standard')} | {', '.join(course.get('Topics', [])[:5])} | {course.get('Url', '')}"
             )
-        external_block = "\n".join(external_text) if external_text else "  - внешние курсы пока не найдены"
+        external_block = "\n".join(external_text) if external_text else "  - внешние ресурсы пока не найдены"
 
         return f"""Студент #{user_id}, курс ID: {course_id}.
 
@@ -165,16 +168,16 @@ class CourseAnalysisGroqService:
 🟢 Сильные темы (оценка > 85%): {', '.join(strong_topics) or 'не выявлены'}
 📁 Все темы курса: {', '.join(all_topics[:15]) or 'общий курс'}
 
-🌐 Найденные внешние курсы через локальный поиск:
+🌐 Найденные внешние ресурсы через локальный поиск (это единственные внешние URL, которые можно использовать):
 {external_block}
 
 ЗАДАЧА:
 1. Дай краткий анализ успеваемости (2-3 предложения на русском).
-2. Обязательно используй найденные внешние курсы, если они релевантны слабым темам.
+2. Используй найденные внешние ресурсы, если они релевантны слабым темам. Не добавляй URL, которых нет в этом списке.
 3. Подбери 3-5 конкретных рекомендаций для закрытия пробелов.
-4. Если используешь внешний курс, сохрани его Url в ответе.
+4. Если используешь внешний ресурс, сохрани его Url в ответе без изменений.
 5. Для каждой рекомендации объясни, КАК ИМЕННО она поможет улучшить результат.
-6. Рекомендации должны быть конкретными: статьи, видео, упражнения, внешние курсы."""
+6. Рекомендации должны быть конкретными: статьи, видео, упражнения, внешние курсы. Видео разрешены только если они есть в найденных внешних ресурсах."""
 
     def _normalize_response(
         self,
@@ -185,29 +188,60 @@ class CourseAnalysisGroqService:
     ) -> CourseAnalysisResponse:
         valid_types = {"article", "video", "course", "exercise"}
         valid_diff = {"Beginner", "Standard", "Advanced"}
+        allowed_by_url = {}
+        allowed_by_title = {}
+        for candidate in external_candidates:
+            normalized_url = self.url_validator.normalize_url(candidate.get("Url"))
+            if normalized_url:
+                allowed_by_url[normalized_url] = candidate
+            title = str(candidate.get("Title", "")).strip().lower()
+            if title:
+                allowed_by_title[title] = candidate
 
         recs_raw = parsed.get("Recommendations", [])
         recommendations = []
 
         for item in recs_raw:
             try:
-                source_kind = "external" if item.get("Url") and any(c.get("Url") == item.get("Url") for c in external_candidates) else "internal"
+                raw_url = item.get("Url")
+                candidate = None
+                normalized_url = self.url_validator.normalize_url(raw_url)
+                if normalized_url:
+                    candidate = allowed_by_url.get(normalized_url)
+                    if not candidate:
+                        logger.info("Dropping hallucinated or unvalidated recommendation URL: %s", raw_url)
+                        continue
+                else:
+                    candidate = allowed_by_title.get(str(item.get("Title", "")).strip().lower())
+
+                source_kind = "external" if candidate else "internal"
+                url = candidate.get("Url") if candidate else None
+                resource_type = candidate.get("ResourceType") if candidate else item.get("ResourceType", "article")
+                if resource_type == "video" and not candidate:
+                    continue
                 rec = RecommendationItem(
                     SourceKind=source_kind,
-                    Title=str(item.get("Title", "Без названия"))[:200],
-                    Description=str(item.get("Description", ""))[:500],
-                    ResourceType=item.get("ResourceType", "article") if item.get("ResourceType") in valid_types else "article",
-                    Url=item.get("Url"),
-                    RelevanceScore=max(0.0, min(1.0, float(item.get("RelevanceScore", 0.5)))),
-                    Difficulty=item.get("Difficulty", "Standard") if item.get("Difficulty") in valid_diff else "Standard",
+                    Title=str(item.get("Title") or (candidate or {}).get("Title") or "Без названия")[:200],
+                    Description=str(item.get("Description") or (candidate or {}).get("Description") or "")[:500],
+                    ResourceType=resource_type if resource_type in valid_types else "article",
+                    Url=url,
+                    RelevanceScore=max(0.0, min(1.0, float(item.get("RelevanceScore", (candidate or {}).get("RelevanceScore", 0.5))))),
+                    Difficulty=item.get("Difficulty", (candidate or {}).get("Difficulty", "Standard")) if item.get("Difficulty", (candidate or {}).get("Difficulty", "Standard")) in valid_diff else "Standard",
                 )
                 recommendations.append(rec)
             except (ValueError, TypeError) as e:
                 logger.warning("Skip malformed recommendation item: %s", e)
                 continue
 
-        if not recommendations and external_candidates:
-            recommendations = self._build_external_fallback_recommendations(external_candidates)
+        used_urls = {rec.Url for rec in recommendations if rec.Url}
+        for fallback in self._build_external_fallback_recommendations(external_candidates):
+            if len(recommendations) >= 5:
+                break
+            if fallback.Url and fallback.Url in used_urls:
+                continue
+            recommendations.append(fallback)
+            if fallback.Url:
+                used_urls.add(fallback.Url)
 
         recommendations = recommendations[:5]
 
@@ -246,19 +280,30 @@ class CourseAnalysisGroqService:
         if not search_topics:
             return []
 
-        try:
-            discovery_result = self.external_course_service.discover_courses(search_topics)
-            logger.info(
-                "External discovery finished for topics %s: saved=%s, queries=%s",
-                search_topics,
-                discovery_result.get("saved", 0),
-                discovery_result.get("queries", []),
-            )
-        except Exception as ex:
-            logger.warning("External discovery failed during course analysis: %s", ex)
+        fresh_candidates = self.external_course_service.discover_fresh_candidates(
+            search_topics,
+            timeout_seconds=config.FRESH_DISCOVERY_TIMEOUT_SECONDS,
+        )
+        self.external_course_service.discover_courses_background(search_topics)
 
-        candidates = self.postgres_provider.get_external_courses(limit=10)
+        try:
+            candidates = self.postgres_provider.get_external_courses(limit=10)
+        except Exception as ex:
+            logger.warning("Failed to load cached external courses during course analysis: %s", ex)
+            return []
         ranked = []
+        for course in fresh_candidates:
+            ranked.append({
+                "Title": course.get("Title", ""),
+                "Description": course.get("Description", ""),
+                "Platform": course.get("Platform", "External"),
+                "Difficulty": course.get("Difficulty", "Standard"),
+                "Topics": course.get("Topics") or [],
+                "Url": course.get("Url"),
+                "ResourceType": course.get("ResourceType", "article"),
+                "RelevanceScore": max(float(course.get("RelevanceScore") or 0.0), self._score_external_course(course, search_topics)),
+            })
+
         for course in candidates:
             score = self._score_external_course(course, search_topics)
             ranked.append({
@@ -268,11 +313,26 @@ class CourseAnalysisGroqService:
                 "Difficulty": course.get("Difficulty", "Standard"),
                 "Topics": course.get("Topics") or [],
                 "Url": course.get("Url"),
+                "ResourceType": "course",
                 "RelevanceScore": score,
             })
 
+        deduped = {}
+        for item in ranked:
+            normalized_url = self.url_validator.normalize_url(item.get("Url"))
+            if not normalized_url:
+                continue
+            if normalized_url not in deduped or item.get("RelevanceScore", 0) > deduped[normalized_url].get("RelevanceScore", 0):
+                deduped[normalized_url] = item
+        ranked = list(deduped.values())
+        if any(self.url_validator.is_specific_course_url(item.get("Url")) for item in ranked):
+            ranked = [
+                item for item in ranked
+                if item.get("ResourceType") != "course"
+                or self.url_validator.is_specific_course_url(item.get("Url"))
+            ]
         ranked.sort(key=lambda x: x.get("RelevanceScore", 0), reverse=True)
-        return ranked[:4]
+        return ranked[:6]
 
     def _score_external_course(self, course: Dict[str, Any], topics: List[str]) -> float:
         text = f"{course.get('Title', '')} {course.get('Description', '')} {' '.join(course.get('Topics') or [])}".lower()
@@ -287,9 +347,9 @@ class CourseAnalysisGroqService:
         for course in external_candidates[:3]:
             results.append(RecommendationItem(
                 SourceKind="external",
-                Title=str(course.get("Title", "Внешний курс"))[:200],
-                Description=str(course.get("Description", "Этот внешний курс найден локальной моделью и может помочь закрыть пробелы по теме."))[:500],
-                ResourceType="course",
+                Title=str(course.get("Title", "Внешний ресурс"))[:200],
+                Description=str(course.get("Description", "Этот внешний ресурс найден web search и прошёл проверку ссылки."))[:500],
+                ResourceType=str(course.get("ResourceType", "course")),
                 Url=course.get("Url"),
                 RelevanceScore=max(0.0, min(1.0, float(course.get("RelevanceScore", 0.6)))),
                 Difficulty=str(course.get("Difficulty", "Standard")),

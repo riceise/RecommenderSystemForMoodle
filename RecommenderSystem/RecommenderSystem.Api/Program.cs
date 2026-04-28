@@ -24,7 +24,7 @@ builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
         options.Password.RequireLowercase = false;
         options.Password.RequireUppercase = false;
         options.Password.RequireNonAlphanumeric = false;
-        options.Password.RequiredLength = 4; // Для тестов можно попроще
+        options.Password.RequiredLength = 4;
         options.User.RequireUniqueEmail = true;
     })
     .AddEntityFrameworkStores<AppDbContext>()
@@ -54,7 +54,6 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    // 1. Определяем схему безопасности (JWT)
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         In = ParameterLocation.Header,
@@ -65,7 +64,6 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "Bearer"
     });
 
-    // 2. Применяем эту схему ко всем запросам
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
@@ -82,12 +80,11 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// Python AI service — HTTP client с таймаутом для долгих Groq-запросов
 builder.Services.AddHttpClient<IPythonAiService, PythonAiService>(client =>
 {
     var pythonUrl = builder.Configuration["PythonService:Url"] ?? "http://localhost:5001";
     client.BaseAddress = new Uri(pythonUrl);
-    client.Timeout = TimeSpan.FromSeconds(120); // Groq может отвечать долго
+    client.Timeout = TimeSpan.FromSeconds(12000); // Groq может отвечать долго
 });
 
 builder.Services.AddScoped<TokenService>();
@@ -112,7 +109,6 @@ builder.Services.AddHttpClient<IRecommendationService, PythonRecommenderService>
     client.BaseAddress = new Uri(pythonUrl);
     client.Timeout = TimeSpan.FromSeconds(30);
 });
-// NOTE: Removed duplicate AddScoped<IRecommendationService> — AddHttpClient already registers it.
 
 var app = builder.Build();
 

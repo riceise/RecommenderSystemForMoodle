@@ -12,8 +12,41 @@ logger = logging.getLogger(__name__)
 class SearchService:
     def __init__(self):
         self.base_url = config.SEARXNG_BASE_URL.rstrip('/')
+        self.headers = {
+            "User-Agent": "NeuroTutorBot/1.0 (+educational research)",
+            "Accept": "application/json",
+            "X-Forwarded-For": "127.0.0.1",
+            "X-Real-IP": "127.0.0.1",
+        }
 
-    def search(self, query: str, max_results: int | None = None) -> list[dict]:
+    def health(self) -> dict:
+        if not config.WEB_SEARCH_ENABLED:
+            return {"status": "disabled", "baseUrl": self.base_url}
+        try:
+            response = requests.get(
+                f"{self.base_url}/search",
+                params={"q": "health", "format": "json"},
+                headers=self.headers,
+                timeout=min(config.WEB_SEARCH_TIMEOUT_SECONDS, 10),
+            )
+            if response.status_code == 403:
+                return {
+                    "status": "forbidden",
+                    "baseUrl": self.base_url,
+                    "statusCode": response.status_code,
+                    "hint": "Enable json in SearXNG search.formats and check bot detection/proxy headers.",
+                }
+            response.raise_for_status()
+            payload = response.json()
+            return {
+                "status": "ok",
+                "baseUrl": self.base_url,
+                "results": len(payload.get("results", [])) if isinstance(payload, dict) else 0,
+            }
+        except Exception as ex:
+            return {"status": "down", "baseUrl": self.base_url, "error": str(ex)}
+
+    def search(self, query: str, max_results: int | None = None, allowed_domains: list[str] | None = None) -> list[dict]:
         max_results = max_results or config.WEB_SEARCH_MAX_RESULTS
         response = requests.get(
             f"{self.base_url}/search",
@@ -22,8 +55,15 @@ class SearchService:
                 "format": "json",
                 "language": "ru-RU",
             },
-            timeout=30,
+            headers=self.headers,
+            timeout=config.WEB_SEARCH_TIMEOUT_SECONDS,
         )
+        if response.status_code == 403:
+            logger.warning(
+                "SearXNG returned 403 for query '%s'. Body: %s",
+                query,
+                response.text[:300],
+            )
         response.raise_for_status()
         payload = response.json()
         results = payload.get("results", []) if isinstance(payload, dict) else []
@@ -32,15 +72,17 @@ class SearchService:
             url = item.get("url")
             if not url:
                 continue
-            domain = urlparse(url).netloc.lower()
-            if any(allowed in domain for allowed in config.EXTERNAL_SEARCH_DOMAINS):
-                filtered.append(item)
+            if allowed_domains is not None:
+                domain = urlparse(url).netloc.lower()
+                if not any(allowed in domain for allowed in allowed_domains):
+                    continue
+            filtered.append(item)
         return filtered[:max_results]
 
     def extract_course_page(self, url: str) -> dict:
         response = requests.get(
             url,
-            timeout=30,
+            timeout=config.COURSE_PAGE_TIMEOUT_SECONDS,
             headers={"User-Agent": "NeuroTutorBot/1.0 (+educational research)"},
         )
         response.raise_for_status()

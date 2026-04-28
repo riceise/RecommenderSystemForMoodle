@@ -45,6 +45,19 @@ class PostgresDataProvider:
             rows = connection.execute(query).mappings().all()
             return [dict(row) for row in rows]
 
+    def health(self) -> dict:
+        try:
+            with self.engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            return {"status": "ok", "host": os.getenv("DB_HOST", "localhost"), "database": os.getenv("DB_NAME", "recommender_db")}
+        except Exception as ex:
+            return {
+                "status": "down",
+                "host": os.getenv("DB_HOST", "localhost"),
+                "database": os.getenv("DB_NAME", "recommender_db"),
+                "error": str(ex),
+            }
+
     def get_external_courses(self, limit: int = 20) -> list[dict]:
         query = text('SELECT "Id", "Title", "Description", "Platform", "Difficulty", "Topics", "Url", "ConfidenceScore" FROM "ExternalCourses" WHERE "IsActive" = true ORDER BY "ConfidenceScore" DESC, "LastParsedAt" DESC LIMIT :limit')
         with self.engine.connect() as connection:
@@ -103,6 +116,13 @@ class PostgresDataProvider:
                 })
                 count += 1
         return count
+
+    def deactivate_external_course(self, url: str) -> None:
+        if not url:
+            return
+        query = text('UPDATE "ExternalCourses" SET "IsActive" = false, "UpdatedAt" = NOW() WHERE "Url" = :url')
+        with self.engine.begin() as connection:
+            connection.execute(query, {"url": url})
 
     def save_recommendation_history(self, session_id: str, user_id: int, recommendations: list[dict]) -> None:
         if not recommendations:

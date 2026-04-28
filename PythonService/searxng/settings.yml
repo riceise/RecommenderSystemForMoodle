@@ -1,0 +1,25 @@
+use_default_settings:
+  engines:
+    keep_only:
+      - duckduckgo
+      - google
+      - brave
+      - wikipedia
+
+general:
+  instance_name: "NeuroTutor Search"
+
+search:
+  formats:
+    - html
+    - json
+
+server:
+  base_url: "http://localhost:8080/"
+  limiter: false
+  public_instance: false
+  secret_key: "change-this-local-development-secret"
+
+outgoing:
+  request_timeout: 8.0
+  max_request_timeout: 15.0

@@ -30,6 +30,25 @@ chat_memory: dict[str, dict] = {}
 def health():
     return jsonify({"status": "healthy", "service": "recommender-python-bridge"})
 
+
+@app.route('/health/dependencies', methods=['GET'])
+def dependency_health():
+    run_probe = str(request.args.get("probe", "false")).lower() == "true"
+    groq_status = "ok" if config.GROQ_API_KEY else "missing_api_key"
+    return jsonify({
+        "status": "ok",
+        "service": "recommender-python-bridge",
+        "dependencies": {
+            "groq": {
+                "status": groq_status,
+                "model": getattr(groq_service, "MODEL", None),
+            },
+            "ollama": external_course_service.ollama.health(run_probe=run_probe),
+            "searxng": external_course_service.search.health(),
+            "postgres": postgres_provider.health(),
+        },
+    })
+
 @app.route('/recommend', methods=['POST'])
 def recommend():
     try:
@@ -60,10 +79,7 @@ def recommend():
         strong_topics = list(dict.fromkeys(strong_topics))
 
         if weak_topics and config.WEB_SEARCH_ENABLED:
-            try:
-                external_course_service.discover_courses(weak_topics)
-            except Exception as ex:
-                logger.warning("External course discovery failed: %s", ex)
+            external_course_service.discover_courses_background(weak_topics)
 
         internal_courses = _select_internal_courses(list(all_tags), weak_topics, limit=2)
         external_courses = _select_external_courses(list(all_tags), weak_topics, limit=2)
@@ -235,6 +251,7 @@ def _select_external_courses(all_tags: list[str], weak_topics: list[str], limit:
     courses = postgres_provider.get_external_courses(limit=20)
     ranked = []
     for course in courses:
+        url = course.get("Url") or ""
         base_score = _score_course(course, weak_topics, all_tags)
         ranked.append({
             "sourceKind": "external",
@@ -244,14 +261,22 @@ def _select_external_courses(all_tags: list[str], weak_topics: list[str], limit:
             "Platform": course.get("Platform", "External"),
             "Difficulty": course.get("Difficulty", "Standard"),
             "Topics": course.get("Topics") or [],
-            "Url": course.get("Url"),
+            "Url": url,
             "RelevanceScore": min(0.99, max(base_score, float(course.get("ConfidenceScore") or 0.0))),
         })
+    if any(_is_specific_external_course_url(item.get("Url", "")) for item in ranked):
+        ranked = [item for item in ranked if _is_specific_external_course_url(item.get("Url", ""))]
     ranked.sort(key=lambda x: x["RelevanceScore"], reverse=True)
     return ranked[:limit]
+
+
+def _is_specific_external_course_url(url: str) -> bool:
+    lowered = (url or "").lower()
+    return any(path in lowered for path in ("/learn/", "/specializations/", "/professional-certificates/", "/xseries/", "/certificates/"))
 
 
 if __name__ == '__main__':
     port = int(os.getenv("PYTHON_SERVICE_PORT", 5001))
     logger.info(f"Starting Python Bridge on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=True)
+    debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    app.run(host='0.0.0.0', port=port, debug=debug, use_reloader=False)

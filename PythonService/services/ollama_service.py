@@ -14,7 +14,36 @@ class OllamaService:
         self.base_url = config.OLLAMA_BASE_URL.rstrip('/')
         self.model = config.OLLAMA_MODEL
 
-    def generate_json(self, system_prompt: str, user_prompt: str) -> Any:
+    def health(self, run_probe: bool = False) -> dict:
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/tags",
+                timeout=config.OLLAMA_HEALTH_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            models = [item.get("name") or item.get("model") for item in payload.get("models", [])]
+            model_available = self.model in models
+            status = "ok" if model_available else "missing_model"
+
+            return {
+                "status": status,
+                "baseUrl": self.base_url,
+                "model": self.model,
+                "modelAvailable": model_available,
+                "models": models,
+                "probeSkipped": bool(run_probe),
+            }
+        except Exception as ex:
+            return {
+                "status": "down",
+                "baseUrl": self.base_url,
+                "model": self.model,
+                "modelAvailable": False,
+                "error": str(ex),
+            }
+
+    def generate_json(self, system_prompt: str, user_prompt: str, timeout: int | None = None) -> Any:
         response = requests.post(
             f"{self.base_url}/api/chat",
             json={
@@ -26,7 +55,7 @@ class OllamaService:
                     {"role": "user", "content": user_prompt},
                 ],
             },
-            timeout=120,
+            timeout=timeout or config.OLLAMA_GENERATE_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
         payload = response.json()
@@ -52,7 +81,7 @@ class OllamaService:
         )
 
         try:
-            result = self.generate_json(system_prompt, user_prompt)
+            result = self.generate_json(system_prompt, user_prompt, timeout=config.OLLAMA_QUERY_TIMEOUT_SECONDS)
             queries = result.get("queries", []) if isinstance(result, dict) else []
             return [str(q).strip() for q in queries if str(q).strip()][:max_queries]
         except Exception as ex:
@@ -66,7 +95,7 @@ class OllamaService:
         )
         user_prompt = json.dumps(raw_course, ensure_ascii=False)
         try:
-            result = self.generate_json(system_prompt, user_prompt)
+            result = self.generate_json(system_prompt, user_prompt, timeout=config.OLLAMA_NORMALIZE_TIMEOUT_SECONDS)
             if not isinstance(result, dict) or not result.get("is_valid_course", True):
                 return None
             return result
