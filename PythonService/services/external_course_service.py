@@ -9,6 +9,7 @@ from services.ollama_service import OllamaService
 from services.search_service import SearchService
 from services.url_validation_service import UrlValidationService
 from utils.config import config
+from utils.text_encoding import clean_text_value, fix_mojibake_text
 
 logger = logging.getLogger(__name__)
 _discovery_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="external-discovery")
@@ -187,29 +188,30 @@ class ExternalCourseService:
 
     def _normalize_without_ollama(self, query: str, item: dict, page: dict, resource_type: str | None = None) -> dict:
         url = page.get("url") or item.get("url") or ""
-        title = page.get("title") or item.get("title") or "External course"
+        title = fix_mojibake_text(page.get("title") or item.get("title") or "External course")
         description = (
             page.get("description")
             or item.get("content")
             or item.get("description")
             or "External course found by NeuroTutor search."
         )
+        description = fix_mojibake_text(description)
         resource_type = resource_type or self.validator.detect_resource_type(url)
         confidence = self._confidence_for_url(url, resource_type)
         return {
             "Title": str(title)[:300],
             "Description": str(description)[:1000],
-            "Platform": self._detect_platform(url),
+            "Platform": fix_mojibake_text(self._detect_platform(url)),
             "Difficulty": "Standard",
-            "Topics": [str(topic) for topic in query.replace('"', "").split()[:8] if not topic.startswith("site:")],
+            "Topics": [fix_mojibake_text(str(topic)) for topic in query.replace('"', "").split()[:8] if not topic.startswith("site:")],
             "Url": url,
             "ResourceType": resource_type,
             "RelevanceScore": confidence,
             "Language": "en",
             "ProviderCourseId": None,
             "ConfidenceScore": confidence,
-            "Metadata": {"source": "searxng_sync", "search_result": item},
-            "SearchQuery": query,
+            "Metadata": clean_text_value({"source": "searxng_sync", "search_result": item}),
+            "SearchQuery": fix_mojibake_text(query),
             "DiscoveryMethod": "searxng_sync",
         }
 

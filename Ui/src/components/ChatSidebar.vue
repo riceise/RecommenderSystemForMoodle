@@ -13,7 +13,7 @@ const authStore = useAuthStore()
 const messages = ref<Message[]>([
   {
     id: '1', role: 'assistant',
-    content: 'Привет! Я твой AI-помощник. Спроси меня о курсе, заданиях или сложных темах — я помогу разобраться! 🎓',
+    content: 'Привет! Я AI-помощник NeuroTutor. Спроси меня о курсе, заданиях или сложных темах, и я помогу разобраться.',
     timestamp: new Date()
   }
 ])
@@ -48,7 +48,7 @@ const sendMessage = async () => {
   } catch (error) {
     messages.value.push({
       id: (Date.now() + 1).toString(), role: 'assistant',
-      content: '⚠️ Ошибка соединения.', timestamp: new Date()
+      content: 'Ошибка соединения.', timestamp: new Date()
     })
   } finally {
     isLoading.value = false
@@ -69,10 +69,10 @@ const formatTime = (date: Date) => new Date(date).toLocaleTimeString('ru-RU', {h
   <aside class="chat-sidebar">
     <div class="chat-header">
       <div class="chat-title">
-        <div class="ai-avatar">🤖</div>
+        <div class="ai-avatar">AI</div>
         <div>
-          <h4>AI Assistant</h4>
-          <span class="status">Online</span>
+          <h4>AI-помощник</h4>
+          <span class="status">онлайн</span>
         </div>
       </div>
     </div>
@@ -93,7 +93,7 @@ const formatTime = (date: Date) => new Date(date).toLocaleTimeString('ru-RU', {h
     </div>
 
     <form @submit.prevent="sendMessage" class="chat-input-form">
-      <input v-model="input" placeholder="Ask about the course..." class="chat-input" :disabled="isLoading"/>
+      <input v-model="input" placeholder="Спросить о курсе..." class="chat-input" :disabled="isLoading"/>
       <button type="submit" class="send-btn" :disabled="!input.trim() || isLoading">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
@@ -107,21 +107,20 @@ const formatTime = (date: Date) => new Date(date).toLocaleTimeString('ru-RU', {h
 .chat-sidebar {
   background: var(--bg-surface);
   backdrop-filter: var(--glass-blur);
-  border: 1.5px solid var(--border-color);
-  border-radius: 24px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   height: calc(100vh - 110px);
   min-height: 600px;
   position: sticky;
   top: 24px;
-  transition: all 0.3s ease;
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-sm);
 }
 
 .chat-header {
   padding: 24px;
-  border-bottom: 1.5px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .chat-title {
@@ -133,12 +132,15 @@ const formatTime = (date: Date) => new Date(date).toLocaleTimeString('ru-RU', {h
 .ai-avatar {
   width: 44px;
   height: 44px;
-  background: rgba(79, 70, 229, 0.1);
-  border-radius: 14px;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.28);
+  border-radius: var(--radius-sm);
+  color: var(--accent-indigo);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: var(--text-sm);
+  font-weight: 800;
 }
 
 .chat-title h4 {
@@ -194,7 +196,7 @@ const formatTime = (date: Date) => new Date(date).toLocaleTimeString('ru-RU', {h
 
 .message-content {
   padding: 14px 18px;
-  border-radius: 18px;
+  border-radius: var(--radius-sm);
   font-size: 16px;
   line-height: 1.6;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
@@ -204,13 +206,11 @@ const formatTime = (date: Date) => new Date(date).toLocaleTimeString('ru-RU', {h
   background: var(--bg-card);
   color: var(--text-main);
   border: 1px solid var(--border-color);
-  border-top-left-radius: 4px;
 }
 
 .message.user .message-content {
-  background: linear-gradient(135deg, var(--accent-indigo), #6366f1);
+  background: var(--accent-indigo);
   color: white;
-  border-top-right-radius: 4px;
 }
 
 .message-content p {
@@ -229,19 +229,17 @@ const formatTime = (date: Date) => new Date(date).toLocaleTimeString('ru-RU', {h
 
 .chat-input-form {
   padding: 20px;
-  border-top: 1.5px solid var(--border-color);
+  border-top: 1px solid var(--border-color);
   display: flex;
   gap: 12px;
   background: var(--bg-surface);
-  border-bottom-left-radius: 24px;
-  border-bottom-right-radius: 24px;
 }
 
 .chat-input {
   flex: 1;
   background: var(--bg-surface-hover);
-  border: 1.5px solid var(--border-color);
-  border-radius: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   padding: 14px 18px;
   color: var(--text-main);
   font-size: 16px;
@@ -262,7 +260,7 @@ const formatTime = (date: Date) => new Date(date).toLocaleTimeString('ru-RU', {h
 .send-btn {
   background: var(--accent-indigo);
   border: none;
-  border-radius: 14px;
+  border-radius: var(--radius-sm);
   width: 48px;
   height: 48px;
   display: flex;
@@ -274,8 +272,8 @@ const formatTime = (date: Date) => new Date(date).toLocaleTimeString('ru-RU', {h
 }
 
 .send-btn:hover:not(:disabled) {
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+  background: #6d28d9;
+  transform: translateY(-1px);
 }
 
 .send-btn:disabled {

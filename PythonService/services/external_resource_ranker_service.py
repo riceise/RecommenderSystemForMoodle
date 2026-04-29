@@ -42,6 +42,7 @@ class ExternalResourceRankerService:
             "courseTags": course_tags,
             "resourceMix": "Prefer 1-2 articles, up to 2 courses, and optionally 1 video.",
             "rules": [
+                "Treat courseName as a hard relevance constraint. Important technologies in courseName must match the selected resources.",
                 "Select only resources that directly help the course topics.",
                 "Do not select resources for a different programming language or unrelated technology stack.",
                 "Use only URLs from candidates. Never invent or rewrite URLs.",
@@ -74,7 +75,8 @@ class ExternalResourceRankerService:
                 response_format={"type": "json_object"},
             )
             parsed = json.loads(response.choices[0].message.content.strip())
-            return self._map_ranked_resources(parsed.get("resources", []), normalized_candidates, max_results)
+            course_terms = self._context_terms(course_name, [], [], course_tags)
+            return self._map_ranked_resources(parsed.get("resources", []), normalized_candidates, max_results, course_terms)
         except Exception as ex:
             logger.warning("Groq external ranker failed, using deterministic fallback: %s", ex)
             return self._fallback_rank(normalized_candidates, max_results, course_name, weak_topics, improvement_topics, course_tags)
@@ -85,7 +87,8 @@ class ExternalResourceRankerService:
 Return only a JSON object with key "resources".
 Each resource must contain: url, isRelevant, score, reason, matchedTopics, resourceType.
 Choose only from candidate URLs. Never create new URLs.
-Reject resources that are off-topic, too generic, or for the wrong technology stack."""
+Reject resources that are off-topic, too generic, or for the wrong technology stack.
+The courseName is a hard constraint: if it names a technology, selected resources must match that technology."""
 
     def _dedupe_candidates(self, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
         deduped: dict[str, dict[str, Any]] = {}
@@ -100,8 +103,16 @@ Reject resources that are off-topic, too generic, or for the wrong technology st
                 deduped[normalized_url] = candidate
         return list(deduped.values())
 
-    def _map_ranked_resources(self, ranked: list[dict[str, Any]], candidates: list[dict[str, Any]], max_results: int) -> list[dict[str, Any]]:
+    def _map_ranked_resources(
+        self,
+        ranked: list[dict[str, Any]],
+        candidates: list[dict[str, Any]],
+        max_results: int,
+        course_terms: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         by_url = {self.url_validator.normalize_url(item.get("Url")): item for item in candidates}
+        course_terms = course_terms or []
+        has_course_context_matches = bool(course_terms) and any(self._context_score(candidate, course_terms) > 0 for candidate in candidates)
         selected: list[dict[str, Any]] = []
         used_urls: set[str] = set()
 
@@ -110,6 +121,8 @@ Reject resources that are off-topic, too generic, or for the wrong technology st
                 continue
             normalized_url = self.url_validator.normalize_url(item.get("url"))
             if not normalized_url or normalized_url in used_urls or normalized_url not in by_url:
+                continue
+            if has_course_context_matches and self._context_score(by_url[normalized_url], course_terms) <= 0:
                 continue
             score = max(0.0, min(1.0, float(item.get("score", by_url[normalized_url].get("RelevanceScore", 0.6)))))
             candidate = dict(by_url[normalized_url])
@@ -134,6 +147,9 @@ Reject resources that are off-topic, too generic, or for the wrong technology st
         course_tags: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         context_terms = self._context_terms(course_name, weak_topics or [], improvement_topics or [], course_tags or [])
+        course_terms = self._context_terms(course_name, [], [], course_tags or [])
+        if course_terms and any(self._context_score(item, course_terms) > 0 for item in candidates):
+            candidates = [item for item in candidates if self._context_score(item, course_terms) > 0]
         ranked = sorted(
             candidates,
             key=lambda item: (
@@ -149,8 +165,8 @@ Reject resources that are off-topic, too generic, or for the wrong technology st
     def _context_terms(course_name: str, weak_topics: list[str], improvement_topics: list[str], course_tags: list[str]) -> list[str]:
         terms: list[str] = []
         weighted_values = (
-            [(course_name, 3)]
-            + [(tag, 5) for tag in course_tags]
+            [(course_name, 8)]
+            + [(tag, 8) for tag in course_tags]
             + [(topic, 1) for topic in weak_topics]
             + [(topic, 1) for topic in improvement_topics]
         )
@@ -158,11 +174,21 @@ Reject resources that are off-topic, too generic, or for the wrong technology st
             lowered = str(value).strip().lower()
             if not lowered:
                 continue
+            high_precision = weight > 1
             expanded = [lowered]
-            expanded.extend([token for token in lowered.replace("+", " ").replace("-", " ").split() if len(token) >= 2])
+            for token in lowered.replace("+", " ").replace("-", " ").replace(":", " ").split():
+                if len(token) < 2:
+                    continue
+                if high_precision and not ExternalResourceRankerService._is_precise_context_token(token):
+                    continue
+                expanded.append(token)
             for term in expanded:
                 terms.extend([term] * weight)
         return terms
+
+    @staticmethod
+    def _is_precise_context_token(token: str) -> bool:
+        return len(token) <= 4 or any(char.isdigit() or char in "#+." for char in token) or any("a" <= char <= "z" for char in token)
 
     @staticmethod
     def _context_score(item: dict[str, Any], terms: list[str]) -> float:

@@ -333,8 +333,8 @@ onMounted(async () => {
 
     <div v-else class="admin-content">
       <header class="page-header">
-        <h1>Admin Dashboard</h1>
-        <p class="subtitle">System monitoring, sync control, and course management</p>
+        <h1>Панель администратора</h1>
+        <p class="subtitle">Мониторинг системы, синхронизация Moodle и управление курсами.</p>
       </header>
 
       <section class="kpi-row">
@@ -472,9 +472,9 @@ onMounted(async () => {
                   <line x1="15" y1="9" x2="15.01" y2="9" />
                 </svg>
               </div>
-              <h3>AI Service</h3>
+              <h3>AI-сервис</h3>
               <span class="status-badge" :class="stats.pythonServiceOnline ? 'status-online' : 'status-offline'">
-                {{ stats.pythonServiceOnline ? 'Online' : 'Offline' }}
+                {{ stats.pythonServiceOnline ? 'Онлайн' : 'Офлайн' }}
               </span>
             </div>
           </div>
@@ -495,11 +495,11 @@ onMounted(async () => {
           <table class="courses-table">
             <thead>
               <tr>
-                <th>Title</th>
-                <th>Platform</th>
-                <th>Topics</th>
-                <th>Difficulty</th>
-                <th>Actions</th>
+                <th>Курс</th>
+                <th>Платформа</th>
+                <th>Темы</th>
+                <th>Сложность</th>
+                <th>Действия</th>
               </tr>
             </thead>
             <tbody>
@@ -525,7 +525,7 @@ onMounted(async () => {
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                     </svg>
-                    Edit
+                    Изменить
                   </button>
                 </td>
               </tr>
@@ -689,8 +689,8 @@ onMounted(async () => {
 }
 
 .kpi-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .kpi-card::before {
@@ -795,8 +795,8 @@ onMounted(async () => {
 .sync-amber-alt::before { background: linear-gradient(90deg, #ef4444, #f59e0b); }
 
 .sync-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .sync-card--loading .sync-content {
@@ -941,8 +941,8 @@ onMounted(async () => {
 }
 
 .monitor-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .monitor-header {
@@ -998,8 +998,8 @@ onMounted(async () => {
 }
 
 .chart-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .chart-card h3 {

@@ -39,10 +39,10 @@ const closeMobileSidebar = () => {
     >
       <div class="sidebar-header">
         <div class="logo" @click="router.push('/dashboard')">
-          <span class="logo-icon">🧠</span>
+          <span class="logo-icon">NT</span>
           <span v-if="showText" class="logo-text">Neuro<span class="highlight">Tutor</span></span>
         </div>
-        <p v-if="showText" class="tagline">Cognitive Co-Pilot</p>
+        <p v-if="showText" class="tagline">AI learning dashboard</p>
       </div>
 
       <nav class="sidebar-nav">
@@ -136,8 +136,19 @@ const closeMobileSidebar = () => {
 }
 
 .logo-icon {
-  font-size: var(--text-2xl);
+  align-items: center;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: var(--radius-sm);
+  color: var(--accent-indigo);
+  display: inline-flex;
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 800;
   flex-shrink: 0;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
 }
 
 .logo-text {

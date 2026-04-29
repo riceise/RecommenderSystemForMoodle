@@ -156,10 +156,10 @@ const getAssignmentIcon = (_index: number, name: string): string => {
 }
 
 const getDifficultyLabel = (diff?: string): string => {
-  if (!diff) return 'Standard difficulty'
-  if (diff === 'Advanced') return 'Advanced difficulty'
-  if (diff === 'Medium') return 'Medium difficulty'
-  return 'Standard difficulty'
+  if (!diff) return 'Стандартная сложность'
+  if (diff === 'Advanced') return 'Повышенная сложность'
+  if (diff === 'Medium') return 'Средняя сложность'
+  return 'Стандартная сложность'
 }
 
 const getIndicatorColor = (percentage: number): string => {
@@ -171,12 +171,12 @@ const getIndicatorColor = (percentage: number): string => {
 
 const resourceTypeLabel = (type: string): string => {
   const map: Record<string, string> = {
-    article: '📄 Статья',
-    video: '🎬 Видео',
-    course: '📚 Курс',
-    exercise: '✏️ Упражнение',
+    article: 'Статья',
+    video: 'Видео',
+    course: 'Курс',
+    exercise: 'Упражнение',
   }
-  return map[type] || '📄 Ресурс'
+  return map[type] || 'Ресурс'
 }
 
 const loadAIAnalysis = async () => {
@@ -293,10 +293,10 @@ const coursePercentage = computed(() => {
       <header class="course-header">
         <div>
           <h1 class="course-title">{{ courseTitle }}</h1>
-          <p class="course-meta">Advanced Computer Science track • Semester 2, 2024</p>
+          <p class="course-meta">Учебный прогресс, задания и AI-рекомендации по курсу</p>
         </div>
         <div class="grade-summary">
-          <span class="grade-label">OVERALL GRADE</span>
+          <span class="grade-label">Итоговый прогресс</span>
           <div class="grade-value-wrapper">
             <span class="grade-value">{{ coursePercentage }}%</span>
             <div
@@ -316,7 +316,7 @@ const coursePercentage = computed(() => {
       <section class="ai-analytics-section">
         <div class="ai-analytics-header">
           <h2>
-            <span class="ai-icon">🧠</span>
+            <span class="ai-icon">AI</span>
             AI-Аналитика
           </h2>
           <button
@@ -428,7 +428,7 @@ const coursePercentage = computed(() => {
         <div class="main-widgets-col">
           <section class="widget dark-widget assignments-widget">
             <div class="widget-header">
-              <h3>Assignment Performance <span class="pulse-dot"></span></h3>
+              <h3>Успеваемость по заданиям <span class="pulse-dot"></span></h3>
               <div class="header-icons">⋮</div>
             </div>
 
@@ -447,7 +447,7 @@ const coursePercentage = computed(() => {
                   <div class="assign-info">
                     <h4 class="assign-title">{{ item.name }}</h4>
                     <p class="assign-meta">
-                      Submitted {{ item.submittedDate }} • {{ getDifficultyLabel(item.difficulty) }}
+                      Сдано {{ item.submittedDate }} • {{ getDifficultyLabel(item.difficulty) }}
                     </p>
                   </div>
                 </div>
@@ -559,7 +559,7 @@ const coursePercentage = computed(() => {
 
 .course-view-wrapper {
   display: grid;
-  grid-template-columns: 1fr 380px;
+  grid-template-columns: minmax(0, 1fr) 380px;
   gap: 24px;
   max-width: 1600px;
   margin: 0 auto;
@@ -589,8 +589,8 @@ const coursePercentage = computed(() => {
   background: var(--bg-surface);
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--border-color);
-  border-radius: 20px;
-  padding: 28px;
+  border-radius: var(--radius-md);
+  padding: var(--space-xl);
   position: relative;
   overflow: hidden;
 }
@@ -603,6 +603,7 @@ const coursePercentage = computed(() => {
   width: 250px;
   height: 250px;
   background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
+  opacity: 0.55;
   pointer-events: none;
 }
 
@@ -625,7 +626,17 @@ const coursePercentage = computed(() => {
 }
 
 .ai-icon {
-  font-size: 28px;
+  align-items: center;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.28);
+  border-radius: var(--radius-sm);
+  color: var(--accent-indigo);
+  display: inline-flex;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  height: 30px;
+  justify-content: center;
+  width: 36px;
 }
 
 .btn-reload {
@@ -882,7 +893,6 @@ const coursePercentage = computed(() => {
   font-weight: 700;
   margin: 0 0 8px 0;
   color: var(--text-main);
-  letter-spacing: -0.5px;
 }
 
 .course-meta {
@@ -899,7 +909,7 @@ const coursePercentage = computed(() => {
   font-size: 12px;
   font-weight: 700;
   color: var(--text-muted);
-  letter-spacing: 1.5px;
+  letter-spacing: 1px;
   text-transform: uppercase;
   display: block;
 }
@@ -951,7 +961,7 @@ const coursePercentage = computed(() => {
 }
 
 .widget {
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   padding: 24px;
   position: relative;
   overflow: hidden;
@@ -1014,7 +1024,7 @@ const coursePercentage = computed(() => {
 .assignment-card {
   background: var(--bg-card);
   padding: 16px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -1025,7 +1035,7 @@ const coursePercentage = computed(() => {
 
 .assignment-card:hover {
   border-color: rgba(186, 158, 255, 0.3);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .assignment-card.critical {

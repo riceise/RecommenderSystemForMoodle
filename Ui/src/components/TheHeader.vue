@@ -62,6 +62,10 @@ const goBack = () => {
 }
 
 const showBackBtn = computed(() => route.path !== '/dashboard')
+
+const handleThemeToggle = () => {
+  themeStore.toggleTheme()
+}
 </script>
 
 <template>
@@ -106,8 +110,11 @@ const showBackBtn = computed(() => route.path !== '/dashboard')
 
       <!-- Theme Toggle -->
       <button
-        @click="themeStore.toggleTheme"
+        type="button"
+        @click="handleThemeToggle"
         class="theme-toggle"
+        :aria-pressed="!themeStore.isDark"
+        :aria-label="themeStore.isDark ? 'Включить светлую тему' : 'Включить темную тему'"
         :title="themeStore.isDark ? 'Светлая тема' : 'Тёмная тема'"
       >
         {{ themeStore.isDark ? '☀️' : '🌙' }}
@@ -117,7 +124,7 @@ const showBackBtn = computed(() => route.path !== '/dashboard')
       <div class="user-profile">
         <div class="avatar">{{ (authStore.user?.email?.[0] ?? 'U').toUpperCase() }}</div>
         <div class="user-info hide-mobile">
-          <span class="status">Online</span>
+          <span class="status">Онлайн</span>
           <span class="email">{{ authStore.user?.email?.split('@')[0] || 'User' }}</span>
         </div>
       </div>

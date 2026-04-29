@@ -112,8 +112,9 @@ const gradeLabel = (pct: number): string => {
   <div class="page-container">
     <main class="dashboard-content">
       <header class="content-header">
-        <h1>Твои курсы под контролем <span class="ai-text">AI</span></h1>
-        <p>Выберите курс для анализа успеваемости и получения рекомендаций.</p>
+        <p class="eyebrow">Учебный кабинет</p>
+        <h1>Курсы и прогресс</h1>
+        <p>Откройте курс, чтобы посмотреть оценки, слабые темы и рекомендации.</p>
       </header>
 
       <!-- Loader -->
@@ -149,8 +150,8 @@ const gradeLabel = (pct: number): string => {
 
           <!-- Бейджи -->
           <div class="card-badges">
-            <span v-if="course.isHot" class="badge badge-hot">🔥 Hot</span>
-            <span v-if="course.needsAttention" class="badge badge-attention">⚠️ Внимание</span>
+            <span v-if="course.isHot" class="badge badge-hot">Высокий прогресс</span>
+            <span v-if="course.needsAttention" class="badge badge-attention">Нужно внимание</span>
             <span class="badge badge-index">#{{ idx + 1 }}</span>
           </div>
 
@@ -187,7 +188,7 @@ const gradeLabel = (pct: number): string => {
 
             <!-- CTA -->
             <button @click="goToCourse(course.id)" class="details-btn">
-              Подробнее <span>➔</span>
+              Открыть курс
             </button>
           </div>
         </div>
@@ -212,23 +213,29 @@ const gradeLabel = (pct: number): string => {
 
 .content-header {
   margin-bottom: var(--space-xl);
-  text-align: center;
+  text-align: left;
+}
+
+.eyebrow {
+  color: var(--accent-mint);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin: 0 0 var(--space-xs);
+  text-transform: uppercase;
 }
 
 .content-header h1 {
   font-size: var(--text-4xl);
   font-weight: 800;
-  margin-bottom: var(--space-sm);
+  margin-bottom: var(--space-xs);
   font-family: var(--font-display);
-}
-
-.ai-text {
-  color: var(--accent-indigo);
 }
 
 .content-header p {
   color: var(--text-muted);
   font-size: var(--text-lg);
+  margin: 0;
 }
 
 /* ─── Bento Grid ─────────────────────────────────────────── */
@@ -255,18 +262,17 @@ const gradeLabel = (pct: number): string => {
   background: var(--bg-surface);
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-xl);
-  padding: var(--space-xl);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
   position: relative;
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: border-color 0.2s ease, transform 0.2s ease;
   box-shadow: var(--shadow-sm);
 }
 
 .bento-card:hover {
-  transform: translateY(-5px);
-  border-color: var(--accent-indigo);
-  box-shadow: var(--shadow-glow);
+  transform: translateY(-2px);
+  border-color: rgba(139, 92, 246, 0.45);
 }
 
 /* Широкая карточка (занимает 2 колонки) */
@@ -289,7 +295,7 @@ const gradeLabel = (pct: number): string => {
   height: 200px;
   border-radius: 50%;
   filter: blur(60px);
-  opacity: 0.4;
+  opacity: 0.18;
   pointer-events: none;
 }
 
@@ -304,12 +310,12 @@ const gradeLabel = (pct: number): string => {
 }
 
 .badge {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   padding: 4px 10px;
-  border-radius: 20px;
+  border-radius: 999px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 .badge-hot {
@@ -377,7 +383,7 @@ const gradeLabel = (pct: number): string => {
   font-weight: 600;
   border: 1px solid;
   padding: 2px 8px;
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
 }
 
 .progress-track {
@@ -396,8 +402,8 @@ const gradeLabel = (pct: number): string => {
 
 .details-btn {
   width: 100%;
-  padding: var(--space-md);
-  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
   border: none;
   background: var(--bg-surface-hover);
   color: var(--text-main);

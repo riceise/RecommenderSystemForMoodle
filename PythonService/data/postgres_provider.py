@@ -2,6 +2,8 @@ import os
 import pandas as pd
 from sqlalchemy import create_engine, text
 
+from utils.text_encoding import clean_json_text, clean_text_value, fix_mojibake_text
+
 class PostgresDataProvider:
     def __init__(self):       
         db_user = os.getenv("DB_USER", "postgres")
@@ -62,7 +64,7 @@ class PostgresDataProvider:
         query = text('SELECT "Id", "Title", "Description", "Platform", "Difficulty", "Topics", "Url", "ResourceType", "SearchQuery", "ConfidenceScore" FROM "ExternalCourses" WHERE "IsActive" = true ORDER BY "ConfidenceScore" DESC, "LastParsedAt" DESC LIMIT :limit')
         with self.engine.connect() as connection:
             rows = connection.execute(query, {"limit": limit}).mappings().all()
-            return [dict(row) for row in rows]
+            return [self._clean_external_course_row(dict(row)) for row in rows]
 
     def get_external_courses_for_topics(self, topics: list[str], limit: int = 30) -> list[dict]:
         clean_topics = []
@@ -108,7 +110,7 @@ class PostgresDataProvider:
         ''')
         with self.engine.connect() as connection:
             rows = connection.execute(query, parameters).mappings().all()
-            return [dict(row) for row in rows]
+            return [self._clean_external_course_row(dict(row)) for row in rows]
 
     def upsert_external_courses(self, courses: list[dict]) -> int:
         if not courses:
@@ -146,24 +148,39 @@ class PostgresDataProvider:
             for course in courses:
                 if not course.get("url"):
                     continue
+                title = fix_mojibake_text(course.get("title", ""))
+                description = fix_mojibake_text(course.get("description", ""))
+                platform = fix_mojibake_text(course.get("platform", "External"))
+                topics = clean_text_value(course.get("topics", []))
+                search_query = fix_mojibake_text(course.get("search_query", ""))
+                metadata = clean_json_text(course.get("metadata", {}))
                 connection.execute(upsert_sql, {
                     "id": str(course.get("id") or uuid.uuid4()),
-                    "title": course.get("title", ""),
-                    "description": course.get("description", ""),
-                    "platform": course.get("platform", "External"),
+                    "title": title,
+                    "description": description,
+                    "platform": platform,
                     "url": course.get("url"),
                     "difficulty": course.get("difficulty", "Standard"),
-                    "topics": json.dumps(course.get("topics", []), ensure_ascii=False),
+                    "topics": json.dumps(topics, ensure_ascii=False),
                     "language": course.get("language", "en"),
                     "provider_course_id": course.get("provider_course_id"),
                     "resource_type": course.get("resource_type", "course"),
-                    "search_query": course.get("search_query", ""),
+                    "search_query": search_query,
                     "discovery_method": course.get("discovery_method", "ollama_search"),
                     "confidence_score": float(course.get("confidence_score", 0.0)),
-                    "metadata_json": json.dumps(course.get("metadata", {}), ensure_ascii=False),
+                    "metadata_json": json.dumps(metadata, ensure_ascii=False),
                 })
                 count += 1
         return count
+
+    @staticmethod
+    def _clean_external_course_row(row: dict) -> dict:
+        row["Title"] = fix_mojibake_text(row.get("Title", ""))
+        row["Description"] = fix_mojibake_text(row.get("Description", ""))
+        row["Platform"] = fix_mojibake_text(row.get("Platform", ""))
+        row["Topics"] = clean_text_value(row.get("Topics") or [])
+        row["SearchQuery"] = fix_mojibake_text(row.get("SearchQuery", ""))
+        return row
 
     def deactivate_external_course(self, url: str) -> None:
         if not url:

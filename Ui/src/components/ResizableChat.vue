@@ -35,7 +35,7 @@ const messages = ref<Message[]>([
   {
     id: '1',
     role: 'assistant',
-    content: 'Привет! Я твой AI-помощник. Спроси меня о курсе, заданиях или сложных темах — я помогу разобраться! 🎓',
+    content: 'Привет! Я AI-помощник NeuroTutor. Спроси меня о курсе, заданиях или сложных темах, и я помогу разобраться.',
     timestamp: new Date(),
   },
 ])
@@ -59,7 +59,7 @@ const maxWidth = computed(() => {
 })
 
 const constrainedWidth = computed(() =>
-  Math.max(MIN_WIDTH, Math.min(chatWidth.value, maxWidth.value))
+  Math.max(MIN_WIDTH, Math.min(chatWidth.value, maxWidth.value)),
 )
 
 const onResizeMouseDown = (e: MouseEvent) => {
@@ -74,8 +74,6 @@ const onResizeMouseDown = (e: MouseEvent) => {
 const onMouseMove = (e: MouseEvent) => {
   if (!isResizing.value) return
   const delta = startX.value - e.clientX
-  // Inverse logic: dragging right (currentX > startX → delta < 0) increases width
-  // dragging left (currentX < startX → delta > 0) decreases width
   const newWidth = startWidth.value - delta
   chatWidth.value = Math.max(MIN_WIDTH, Math.min(newWidth, maxWidth.value))
   emit('resize', chatWidth.value)
@@ -97,7 +95,7 @@ onMounted(async () => {
       const { data } = await api.get(`/student/courses/${props.courseId}/context`)
       courseContext.value = data
     } catch {
-      // Context fetch failed — chat will work without it
+      // Chat remains usable even when course context is unavailable.
     }
   }
 })
@@ -147,7 +145,7 @@ const sendMessage = async () => {
       timestamp: new Date(),
     })
   } catch (err: any) {
-    const detail = err.response?.data?.reply || err.response?.data?.error || '⚠️ Ошибка соединения.'
+    const detail = err.response?.data?.reply || err.response?.data?.error || 'Ошибка соединения.'
     messages.value.push({
       id: (Date.now() + 1).toString(),
       role: 'assistant',
@@ -172,10 +170,7 @@ const formatTime = (date: Date) =>
 </script>
 
 <template>
-  <aside
-    class="resizable-chat"
-    :style="{ width: `${constrainedWidth}px` }"
-  >
+  <aside class="resizable-chat" :style="{ width: `${constrainedWidth}px` }">
     <div
       class="resize-handle"
       :class="{ 'resize-handle--active': isResizing }"
@@ -187,10 +182,10 @@ const formatTime = (date: Date) =>
     <div class="chat-inner">
       <div class="chat-header">
         <div class="chat-title">
-          <div class="ai-avatar">🤖</div>
+          <div class="ai-avatar">AI</div>
           <div>
-            <h4>AI Assistant</h4>
-            <span class="status">Online</span>
+            <h4>AI-помощник</h4>
+            <span class="status">онлайн</span>
           </div>
         </div>
       </div>
@@ -220,11 +215,11 @@ const formatTime = (date: Date) =>
       <form @submit.prevent="sendMessage" class="chat-input-form">
         <input
           v-model="input"
-          placeholder="Ask about the course..."
+          placeholder="Спросить о курсе..."
           class="chat-input"
           :disabled="isLoading"
         />
-        <button type="submit" class="send-btn" :disabled="!input.trim() || isLoading">
+        <button type="submit" class="send-btn" :disabled="!input.trim() || isLoading" aria-label="Отправить сообщение">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path
               stroke-linecap="round"
@@ -241,30 +236,40 @@ const formatTime = (date: Date) =>
 
 <style scoped>
 .resizable-chat {
-  position: relative;
-  flex-shrink: 0;
   align-self: start;
+  flex-shrink: 0;
+  position: relative;
 }
 
 .resize-handle {
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  left: -5px;
-  width: 10px;
-  cursor: col-resize;
-  z-index: 10;
-  display: flex;
   align-items: center;
+  background: rgba(139, 92, 246, 0.18);
+  border-radius: var(--radius-sm);
+  bottom: var(--space-sm);
+  cursor: col-resize;
+  display: flex;
   justify-content: center;
-  border-radius: 16px;
-  background: rgba(139, 92, 246, 0.25);
+  left: -5px;
+  position: absolute;
+  top: var(--space-sm);
   transition: background 0.2s;
+  width: 10px;
+  z-index: 10;
 }
 
 .resize-handle:hover,
 .resize-handle--active {
-  background: rgba(139, 92, 246, 0.6);
+  background: rgba(139, 92, 246, 0.5);
+}
+
+.resize-handle-line::before,
+.resize-handle-line::after {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 1px;
+  content: '';
+  display: block;
+  height: 16px;
+  width: 2px;
 }
 
 .resize-handle-line {
@@ -273,74 +278,66 @@ const formatTime = (date: Date) =>
   gap: 2px;
 }
 
-.resize-handle-line::before,
-.resize-handle-line::after {
-  content: '';
-  display: block;
-  width: 2px;
-  height: 16px;
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: 1px;
-}
-
 .chat-inner {
   background: var(--bg-surface);
-  backdrop-filter: var(--glass-blur);
-  border: 1.5px solid var(--border-color);
-  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
   height: calc(100vh - 110px);
   min-height: 600px;
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
 }
 
 .chat-header {
+  border-bottom: 1px solid var(--border-color);
   padding: var(--space-lg);
-  border-bottom: 1.5px solid var(--border-color);
 }
 
 .chat-title {
-  display: flex;
   align-items: center;
-  gap: 14px;
+  display: flex;
+  gap: var(--space-sm);
 }
 
 .ai-avatar {
-  width: 48px;
-  height: 48px;
-  background: rgba(79, 70, 229, 0.1);
-  border-radius: var(--radius-md);
-  display: flex;
   align-items: center;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.28);
+  border-radius: var(--radius-sm);
+  color: var(--accent-indigo);
+  display: flex;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  height: 44px;
   justify-content: center;
-  font-size: 28px;
+  width: 44px;
 }
 
 .chat-title h4 {
-  margin: 0 0 4px 0;
-  font-size: var(--text-lg);
   color: var(--text-main);
-  font-weight: 700;
   font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  margin: 0 0 2px;
 }
 
 .status {
-  font-size: 13px;
   color: var(--accent-mint);
+  font-size: var(--text-xs);
   font-weight: 800;
+  letter-spacing: 0.7px;
   text-transform: uppercase;
-  letter-spacing: 1px;
 }
 
 .chat-messages {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: var(--space-md);
   overflow-y: auto;
   padding: var(--space-lg);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -355,111 +352,106 @@ const formatTime = (date: Date) =>
 .message {
   display: flex;
   flex-direction: column;
-  max-width: 85%;
+  max-width: 86%;
   position: relative;
 }
 
 .message.user {
-  margin-left: auto;
   align-items: flex-end;
+  margin-left: auto;
 }
 
 .message.assistant {
-  margin-right: auto;
   align-items: flex-start;
+  margin-right: auto;
 }
 
 .message-content {
-  padding: var(--space-md) var(--space-lg);
-  border-radius: var(--radius-md);
-  font-size: var(--text-base);
-  line-height: 1.6;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  padding: var(--space-sm) var(--space-md);
 }
 
 .message.assistant .message-content {
   background: var(--bg-card);
-  color: var(--text-main);
   border: 1px solid var(--border-color);
-  border-top-left-radius: 4px;
+  color: var(--text-main);
 }
 
 .message.user .message-content {
-  background: linear-gradient(135deg, var(--accent-indigo), #6366f1);
+  background: var(--accent-indigo);
   color: white;
-  border-top-right-radius: 4px;
 }
 
 .message-content p {
-  margin: 0 0 6px 0;
+  margin: 0 0 6px;
   white-space: pre-wrap;
-
 }
 
 .message-time {
-  font-size: 13px;
   color: var(--text-muted);
+  font-size: 12px;
   font-weight: 500;
 }
 
 .message.user .message-time {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .chat-input-form {
-  padding: var(--space-lg);
-  border-top: 1.5px solid var(--border-color);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-color);
   display: flex;
   gap: var(--space-sm);
-  background: var(--bg-surface);
-  border-bottom-left-radius: var(--radius-xl);
-  border-bottom-right-radius: var(--radius-xl);
+  padding: var(--space-lg);
 }
 
 .chat-input {
-  flex: 1;
   background: var(--bg-surface-hover);
-  border: 1.5px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   color: var(--text-main);
-  font-size: var(--text-base);
+  flex: 1;
+  font-size: var(--text-sm);
   outline: none;
-  transition: all 0.2s;
+  padding: var(--space-sm) var(--space-md);
+  transition: border-color 0.2s, background 0.2s;
 }
 
 .chat-input:focus {
-  border-color: var(--accent-indigo);
   background: var(--bg-card);
+  border-color: var(--accent-indigo);
 }
 
 .chat-input::placeholder {
   color: var(--text-muted);
-  opacity: 0.6;
+  opacity: 0.7;
 }
 
 .send-btn {
+  align-items: center;
   background: var(--accent-indigo);
   border: none;
-  border-radius: var(--radius-md);
-  width: 52px;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  border-radius: var(--radius-sm);
   color: white;
   cursor: pointer;
-  transition: all 0.2s;
+  display: flex;
+  height: 44px;
+  justify-content: center;
+  transition: background 0.2s, transform 0.2s;
+  width: 44px;
 }
 
 .send-btn:hover:not(:disabled) {
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+  background: #6d28d9;
+  transform: translateY(-1px);
 }
 
 .send-btn:disabled {
-  opacity: 0.4;
-  filter: grayscale(1);
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .typing-indicator {
@@ -469,11 +461,11 @@ const formatTime = (date: Date) =>
 }
 
 .typing-indicator span {
-  width: 7px;
-  height: 7px;
+  animation: bounce 1.4s infinite ease-in-out;
   background: var(--text-muted);
   border-radius: 50%;
-  animation: bounce 1.4s infinite ease-in-out;
+  height: 7px;
+  width: 7px;
 }
 
 .typing-indicator span:nth-child(1) {
@@ -486,25 +478,25 @@ const formatTime = (date: Date) =>
 
 @keyframes bounce {
   0%, 80%, 100% {
-    transform: scale(0.3);
     opacity: 0.4;
+    transform: scale(0.3);
   }
   40% {
-    transform: scale(1);
     opacity: 1;
+    transform: scale(1);
   }
 }
 
 @media (max-width: 1100px) {
   .resizable-chat {
-    width: 100% !important;
     max-width: 100%;
+    width: 100% !important;
   }
 
   .chat-inner {
     height: auto;
-    min-height: 750px;
     max-height: calc(100vh - 100px);
+    min-height: 640px;
     position: static;
   }
 
@@ -513,54 +505,31 @@ const formatTime = (date: Date) =>
   }
 
   .chat-messages {
-    max-height: 600px;
+    max-height: 520px;
   }
 }
 
 @media (max-width: 600px) {
-  .resizable-chat {
-    width: 100% !important;
-    margin: 0;
-  }
-
   .chat-inner {
-    border-radius: var(--radius-lg);
-    min-height: 820px;
+    border-radius: var(--radius-md);
     max-height: calc(100vh - 90px);
+    min-height: 620px;
   }
 
-  .chat-header {
-    padding: var(--space-md);
-  }
-
-  .chat-messages {
-    padding: var(--space-md);
-    max-height: 680px;
-    gap: var(--space-md);
-  }
-
+  .chat-header,
+  .chat-messages,
   .chat-input-form {
     padding: var(--space-md);
   }
 
   .message-content {
-    padding: var(--space-sm) var(--space-md);
     font-size: 15px;
   }
 
+  .ai-avatar,
   .send-btn {
-    width: 44px;
-    height: 44px;
-  }
-
-  .ai-avatar {
-    width: 40px;
     height: 40px;
-    font-size: 20px;
-  }
-
-  .chat-title h4 {
-    font-size: var(--text-base);
+    width: 40px;
   }
 }
 </style>

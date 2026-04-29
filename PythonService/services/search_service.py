@@ -5,6 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from utils.config import config
+from utils.text_encoding import fix_mojibake_text
 
 logger = logging.getLogger(__name__)
 
@@ -86,17 +87,19 @@ class SearchService:
             headers={"User-Agent": "NeuroTutorBot/1.0 (+educational research)"},
         )
         response.raise_for_status()
+        if not response.encoding or response.encoding.lower() in {"iso-8859-1", "latin-1"}:
+            response.encoding = response.apparent_encoding or "utf-8"
         html = response.text
         soup = BeautifulSoup(html, "lxml")
 
-        title = (soup.title.text.strip() if soup.title and soup.title.text else "")
+        title = fix_mojibake_text(soup.title.text.strip() if soup.title and soup.title.text else "")
         meta_description = ""
         meta = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "og:description"})
         if meta:
-            meta_description = (meta.get("content") or "").strip()
+            meta_description = fix_mojibake_text((meta.get("content") or "").strip())
 
-        headings = [h.get_text(" ", strip=True) for h in soup.find_all(["h1", "h2", "h3"])[:10]]
-        text_blocks = [p.get_text(" ", strip=True) for p in soup.find_all(["p", "li"])[:40]]
+        headings = [fix_mojibake_text(h.get_text(" ", strip=True)) for h in soup.find_all(["h1", "h2", "h3"])[:10]]
+        text_blocks = [fix_mojibake_text(p.get_text(" ", strip=True)) for p in soup.find_all(["p", "li"])[:40]]
 
         return {
             "url": url,

@@ -1,83 +1,99 @@
-﻿<script setup lang="ts">
-import {ref, reactive} from 'vue';
-import {useRouter} from 'vue-router';
-import {useAuthStore} from '../stores/auth';
-import {useThemeStore} from '../stores/theme'; 
+<script setup lang="ts">
+import { ref, reactive } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
+import { useThemeStore } from '../stores/theme'
 
-const router = useRouter();
-const authStore = useAuthStore();
-const themeStore = useThemeStore(); 
+const router = useRouter()
+const authStore = useAuthStore()
+const themeStore = useThemeStore()
 
-const isRegister = ref(false);
-const isLoading = ref(false);
+const isRegister = ref(false)
+const isLoading = ref(false)
 
 const formData = reactive({
   email: '',
   password: '',
-  fullName: ''
-});
+  fullName: '',
+})
 
 const handleSubmit = async () => {
-  isLoading.value = true;
+  isLoading.value = true
   try {
     if (isRegister.value) {
-      await authStore.register(formData);
+      await authStore.register(formData)
     } else {
-      await authStore.login({email: formData.email, password: formData.password});
+      await authStore.login({ email: formData.email, password: formData.password })
     }
-    router.push('/dashboard');
+    router.push('/dashboard')
   } catch (error: any) {
-    alert('Ошибка: ' + (error.response?.data || 'Проверьте данные'));
+    alert('Ошибка: ' + (error.response?.data || 'Проверьте данные'))
   } finally {
-    isLoading.value = false;
+    isLoading.value = false
   }
-};
+}
 </script>
 
 <template>
-  <div class="auth-container">
-    <button @click="themeStore.toggleTheme" class="theme-toggle-btn">
+  <main class="auth-page">
+    <button
+      @click="themeStore.toggleTheme"
+      class="theme-toggle-btn"
+      :aria-label="themeStore.isDark ? 'Включить светлую тему' : 'Включить темную тему'"
+    >
       {{ themeStore.isDark ? '☀️' : '🌙' }}
     </button>
 
-    <div class="background-orb orb-1"></div>
-    <div class="background-orb orb-2"></div>
+    <section class="auth-shell">
+      <div class="brand-panel">
+        <div class="brand-mark">NT</div>
+        <div>
+          <h1>Neuro<span>Tutor</span></h1>
+          <p>Персональный учебный кабинет с AI-анализом прогресса, курсов и зон внимания.</p>
+        </div>
 
-    <div class="glass-wrapper">
-      <div class="art-section">
-        <div class="content">
-          <h1 class="logo-text">Neuro<span class="highlight">Tutor</span></h1>
-          <p class="tagline">Твой персональный AI-тьютор.<br>Учись умнее, а не дольше.</p>
-          <div class="illustration-3d">
-            <div class="sphere main-sphere"></div>
-            <div class="sphere small-sphere"></div>
+        <div class="brand-points">
+          <div class="point">
+            <span class="point-index">01</span>
+            <div>
+              <strong>Курсы под контролем</strong>
+              <p>Смотрите оценки, прогресс и задания в одном месте.</p>
+            </div>
+          </div>
+          <div class="point">
+            <span class="point-index">02</span>
+            <div>
+              <strong>AI-рекомендации</strong>
+              <p>Получайте подсказки по слабым темам и материалам.</p>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="form-section">
+      <div class="form-panel">
         <div class="form-header">
-          <h2>{{ isRegister ? 'Создать аккаунт' : 'С возвращением!' }}</h2>
+          <p class="eyebrow">{{ isRegister ? 'Регистрация' : 'Вход' }}</p>
+          <h2>{{ isRegister ? 'Создать аккаунт' : 'С возвращением' }}</h2>
           <p class="subtitle">
-            {{ isRegister ? 'Заполните данные для начала обучения' : 'Введите данные для входа в систему' }}
+            {{ isRegister ? 'Заполните данные для синхронизации с Moodle.' : 'Введите данные, чтобы открыть учебный кабинет.' }}
           </p>
         </div>
 
         <form @submit.prevent="handleSubmit" class="neuro-form">
-          <div v-if="isRegister" class="input-group slide-in">
+          <div v-if="isRegister" class="input-group">
             <label>Полное имя</label>
-            <input type="text" v-model="formData.fullName" placeholder="Иван Петров" required/>
+            <input type="text" v-model="formData.fullName" placeholder="Иван Петров" required />
           </div>
 
           <div class="input-group">
             <label>Email</label>
-            <input type="email" v-model="formData.email" placeholder="student@university.com" required/>
-            <span v-if="isRegister" class="hint">Используйте email из Moodle для синхронизации</span>
+            <input type="email" v-model="formData.email" placeholder="student@university.com" required />
+            <span v-if="isRegister" class="hint">Используйте email из Moodle для синхронизации.</span>
           </div>
 
           <div class="input-group">
             <label>Пароль</label>
-            <input type="password" v-model="formData.password" placeholder="••••••••" required/>
+            <input type="password" v-model="formData.password" placeholder="••••••••" required />
           </div>
 
           <button type="submit" class="btn-primary" :disabled="isLoading">
@@ -87,271 +103,303 @@ const handleSubmit = async () => {
         </form>
 
         <div class="switch-mode">
-          <p>
-            {{ isRegister ? 'Уже есть аккаунт?' : 'Нет аккаунта?' }}
-            <a href="#" @click.prevent="isRegister = !isRegister">
-              {{ isRegister ? 'Войти' : 'Создать' }}
-            </a>
-          </p>
+          <span>{{ isRegister ? 'Уже есть аккаунт?' : 'Нет аккаунта?' }}</span>
+          <button type="button" @click="isRegister = !isRegister">
+            {{ isRegister ? 'Войти' : 'Создать' }}
+          </button>
         </div>
       </div>
-    </div>
-  </div>
+    </section>
+  </main>
 </template>
 
 <style scoped>
-.auth-container {
-  min-height: 100vh;
-  display: flex;
+.auth-page {
   align-items: center;
+  background: var(--bg-body);
+  color: var(--text-main);
+  display: flex;
   justify-content: center;
-  background: var(--bg-color); 
+  min-height: 100vh;
+  padding: var(--space-xl);
   position: relative;
-  overflow: hidden;
-  font-family: 'Inter', sans-serif;
-  transition: background 0.3s ease;
 }
 
 .theme-toggle-btn {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  z-index: 10;
-  width: 45px;
-  height: 45px;
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-  background: var(--card-bg);
-  cursor: pointer;
-  font-size: 20px;
-  display: flex;
   align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-}
-
-.background-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  z-index: 0;
-  opacity: 0.4;
-}
-
-.orb-1 {
-  width: 400px;
-  height: 400px;
-  background: #7c3aed;
-  top: -100px;
-  left: -100px;
-}
-
-.orb-2 {
-  width: 300px;
-  height: 300px;
-  background: #2dd4bf;
-  bottom: -50px;
-  right: -50px;
-}
-
-.glass-wrapper {
-  display: flex;
-  width: 900px;
-  max-width: 95%;
-  min-height: 600px;
-  background: var(--card-bg); 
-  backdrop-filter: blur(16px);
+  background: var(--bg-surface);
   border: 1px solid var(--border-color);
-  border-radius: 24px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-  z-index: 1;
-  overflow: hidden;
-  transition: all 0.3s ease;
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  cursor: pointer;
+  display: flex;
+  font-size: var(--text-lg);
+  height: 44px;
+  justify-content: center;
+  position: absolute;
+  right: var(--space-lg);
+  top: var(--space-lg);
+  transition: background 0.2s, border-color 0.2s;
+  width: 44px;
 }
 
-.art-section {
-  flex: 1;
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.1), rgba(45, 212, 191, 0.05));
+.theme-toggle-btn:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--accent-indigo);
+}
+
+.auth-shell {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(340px, 1fr);
+  max-width: 980px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.brand-panel {
+  background: var(--bg-card);
+  border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
+  gap: var(--space-xl);
   justify-content: center;
-  padding: 40px;
-  position: relative;
+  padding: var(--space-2xl);
 }
 
-.logo-text {
-  font-size: 2.5rem;
+.brand-mark {
+  align-items: center;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: var(--radius-md);
+  color: var(--accent-indigo);
+  display: flex;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
   font-weight: 800;
-  color: var(--text-color);
-  margin-bottom: 10px;
+  height: 56px;
+  justify-content: center;
+  width: 56px;
 }
 
-.highlight {
-  color: #2dd4bf;
+.brand-panel h1 {
+  color: var(--text-main);
+  font-size: var(--text-4xl);
+  font-weight: 800;
+  margin-bottom: var(--space-sm);
 }
 
-.tagline {
-  font-size: 1.1rem;
+.brand-panel h1 span {
+  color: var(--accent-indigo);
+}
+
+.brand-panel p {
   color: var(--text-muted);
+  font-size: var(--text-base);
+  margin: 0;
+}
+
+.brand-points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.point {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.point-index {
+  color: var(--accent-mint);
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+
+.point strong {
+  color: var(--text-main);
+  display: block;
+  font-size: var(--text-sm);
+  margin-bottom: 2px;
+}
+
+.point p {
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
-.illustration-3d {
-  position: relative;
-  height: 200px;
-  margin-top: 40px;
-}
-
-.sphere {
-  border-radius: 50%;
-  position: absolute;
-}
-
-.main-sphere {
-  width: 120px;
-  height: 120px;
-  background: linear-gradient(135deg, #6366f1, #a855f7);
-  top: 20%;
-  left: 20%;
-  animation: float 6s ease-in-out infinite;
-  box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
-}
-
-.small-sphere {
-  width: 60px;
-  height: 60px;
-  background: linear-gradient(135deg, #2dd4bf, #06b6d4);
-  top: 60%;
-  left: 60%;
-  animation: float 4s ease-in-out infinite reverse;
-}
-
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-20px);
-  }
-}
-
-.form-section {
-  flex: 1;
-  padding: 50px;
+.form-panel {
+  background: var(--bg-surface);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  background: var(--card-bg);
+  padding: var(--space-2xl);
+}
+
+.form-header {
+  margin-bottom: var(--space-xl);
+}
+
+.eyebrow {
+  color: var(--accent-mint);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin: 0 0 var(--space-xs);
+  text-transform: uppercase;
 }
 
 .form-header h2 {
-  color: var(--text-color);
-  font-size: 2rem;
-  margin-bottom: 10px;
+  color: var(--text-main);
+  font-size: var(--text-3xl);
+  font-weight: 800;
+  margin-bottom: var(--space-xs);
 }
 
 .subtitle {
   color: var(--text-muted);
-  font-size: 0.9rem;
-  margin-bottom: 30px;
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.neuro-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
 }
 
 .input-group {
-  margin-bottom: 20px;
   display: flex;
   flex-direction: column;
+  gap: var(--space-xs);
 }
 
 .input-group label {
-  color: var(--text-color);
-  font-size: 0.9rem;
-  margin-bottom: 8px;
-  font-weight: 500;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 700;
 }
 
 .input-group input {
-  background: var(--hover-bg);
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
-  padding: 12px 16px;
-  border-radius: 12px;
-  color: var(--text-color);
-  font-size: 1rem;
-  transition: all 0.3s;
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  font-size: var(--text-base);
+  outline: none;
+  padding: var(--space-sm) var(--space-md);
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .input-group input:focus {
-  outline: none;
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.1);
+  border-color: var(--accent-indigo);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
 }
 
 .hint {
-  font-size: 0.75rem;
   color: #f59e0b;
-  margin-top: 5px;
+  font-size: var(--text-xs);
 }
 
 .btn-primary {
-  width: 100%;
-  padding: 14px;
-  border-radius: 12px;
-  background: linear-gradient(90deg, #4f46e5, #9333ea);
-  color: white;
+  align-items: center;
+  background: var(--accent-indigo);
   border: none;
-  font-weight: 600;
-  font-size: 1rem;
+  border-radius: var(--radius-sm);
+  color: white;
   cursor: pointer;
-  transition: all 0.3s;
-  margin-top: 10px;
+  display: flex;
+  font-size: var(--text-base);
+  font-weight: 800;
+  justify-content: center;
+  margin-top: var(--space-xs);
+  min-height: 48px;
+  padding: var(--space-sm) var(--space-lg);
+  transition: background 0.2s, transform 0.2s;
 }
 
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.4);
+.btn-primary:hover:not(:disabled) {
+  background: #6d28d9;
+  transform: translateY(-1px);
+}
+
+.btn-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.loader {
+  animation: spin 0.8s linear infinite;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  border-top-color: white;
+  height: 20px;
+  width: 20px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .switch-mode {
-  text-align: center;
-  margin-top: 20px;
+  align-items: center;
   color: var(--text-muted);
-  font-size: 0.9rem;
+  display: flex;
+  font-size: var(--text-sm);
+  gap: var(--space-xs);
+  justify-content: center;
+  margin-top: var(--space-lg);
 }
 
-.switch-mode a {
-  color: #2dd4bf;
-  text-decoration: none;
-  font-weight: 600;
-  margin-left: 5px;
+.switch-mode button {
+  background: transparent;
+  border: none;
+  color: var(--accent-indigo);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0;
 }
 
-@media (max-width: 768px) {
-  .glass-wrapper {
-    flex-direction: column;
-    height: auto;
+@media (max-width: 820px) {
+  .auth-page {
+    padding: var(--space-md);
   }
 
-  .art-section {
+  .auth-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-panel {
+    border-bottom: 1px solid var(--border-color);
+    border-right: none;
+    padding: var(--space-xl);
+  }
+
+  .brand-points {
     display: none;
   }
 
-  .form-section {
-    padding: 30px;
+  .form-panel {
+    padding: var(--space-xl);
   }
 }
 
-.slide-in {
-  animation: slideDown 0.3s ease-out;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
+@media (max-width: 520px) {
+  .theme-toggle-btn {
+    right: var(--space-md);
+    top: var(--space-md);
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  .brand-panel h1 {
+    font-size: var(--text-3xl);
+  }
+
+  .form-header h2 {
+    font-size: var(--text-2xl);
   }
 }
 </style>
