@@ -36,7 +36,7 @@ class CourseAnalysisGroqService:
 
     def analyze(self, request: CourseAnalysisRequest) -> CourseAnalysisResponse:
         weak_topics, improvement_topics, strong_topics, all_topics = self._analyze_grades(request.grades, request.courseTags)
-        search_topics = list(dict.fromkeys(weak_topics + improvement_topics + (request.courseTags or []) + [request.courseName]))
+        search_topics = list(dict.fromkeys(weak_topics + improvement_topics + (request.courseTags or [])))
 
         if not request.grades:
             logger.warning("No grades provided for user %s, course %s", request.userId, request.courseId)
@@ -244,15 +244,8 @@ class CourseAnalysisGroqService:
 
         recommendations = [rec for rec in recommendations if rec.Url]
 
-        used_urls = {rec.Url for rec in recommendations if rec.Url}
-        for fallback in self._build_external_fallback_recommendations(external_candidates):
-            if len(recommendations) >= 5:
-                break
-            if fallback.Url and fallback.Url in used_urls:
-                continue
-            recommendations.append(fallback)
-            if fallback.Url:
-                used_urls.add(fallback.Url)
+        if not recommendations:
+            recommendations = self._build_external_fallback_recommendations(external_candidates)
 
         recommendations = recommendations[:5]
 
@@ -305,6 +298,8 @@ class CourseAnalysisGroqService:
         results: List[RecommendationItem] = []
         for course in external_candidates[:5]:
             if not course.get("Url"):
+                continue
+            if float(course.get("RelevanceScore", course.get("ConfidenceScore", 0.0)) or 0.0) < 0.5:
                 continue
             results.append(RecommendationItem(
                 SourceKind="external",

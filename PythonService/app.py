@@ -85,7 +85,11 @@ def recommend():
         if not has_grade_data and not weak_topics:
             weak_topics = list(dict.fromkeys([tag for tag in all_tags if str(tag).strip()]))
 
-        search_topics = list(dict.fromkeys(weak_topics + list(all_tags)))
+        course_name_key = str(req.courseName or "").strip().lower()
+        search_topics = list(dict.fromkeys([
+            tag for tag in weak_topics + list(all_tags)
+            if str(tag).strip() and str(tag).strip().lower() != course_name_key
+        ]))
         external_courses = external_course_service.discover_and_load_relevant_resources(
             search_topics,
             course_name=req.courseName,

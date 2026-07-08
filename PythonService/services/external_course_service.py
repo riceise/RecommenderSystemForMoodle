@@ -44,17 +44,19 @@ class ExternalCourseService:
         improvement_topics: list[str] | None = None,
         course_tags: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        clean_topics = list(dict.fromkeys([str(topic).strip() for topic in topics if str(topic).strip()]))
+        clean_topics = self._clean_search_topics(topics, course_name)
         if not clean_topics:
             return []
 
-        cached_before = self._load_relevant_cached_resources(clean_topics)
-        fresh_resources = self.discover_resources(clean_topics) if config.WEB_SEARCH_ENABLED else []
+        stack_terms = self.ranker.extract_stack_terms([course_name, *(course_tags or []), *clean_topics])
+
+        cached_before = self._filter_resources_by_stack(self._load_relevant_cached_resources(clean_topics), stack_terms)
+        fresh_resources = self.discover_resources(clean_topics, stack_terms=stack_terms) if config.WEB_SEARCH_ENABLED else []
         if fresh_resources:
             saved = self.persist_resources(fresh_resources)
             logger.info("Synchronous external discovery saved %s resources for topics=%s", saved, clean_topics)
 
-        cached_after = self._load_relevant_cached_resources(clean_topics)
+        cached_after = self._filter_resources_by_stack(self._load_relevant_cached_resources(clean_topics), stack_terms)
         merged = self._merge_and_rank_resources(cached_after + fresh_resources + cached_before, clean_topics)
         return self.ranker.rank_resources(
             course_name=course_name,
@@ -65,13 +67,13 @@ class ExternalCourseService:
             max_results=5,
         )
 
-    def discover_resources(self, weak_topics: list[str]) -> list[dict[str, Any]]:
+    def discover_resources(self, weak_topics: list[str], stack_terms: list[str] | None = None) -> list[dict[str, Any]]:
         if not config.WEB_SEARCH_ENABLED:
             return []
 
         queries = self.ollama.generate_search_queries(weak_topics) if config.OLLAMA_EXTERNAL_SEARCH_ENABLED else []
         if not queries:
-            queries = self._build_resource_queries(weak_topics)
+            queries = self._build_resource_queries(weak_topics, stack_terms=stack_terms)
 
         discovered: list[dict[str, Any]] = []
         seen_urls: set[str] = set()
@@ -89,6 +91,9 @@ class ExternalCourseService:
             for item in results:
                 candidate = self._build_validated_candidate(query, item)
                 if not candidate:
+                    continue
+                if stack_terms and not self.ranker.resource_matches_stack(candidate, stack_terms):
+                    logger.info("Skip off-stack external resource for stack=%s: %s", stack_terms, candidate.get("Url"))
                     continue
                 url = candidate.get("Url")
                 if not url or url in seen_urls:
@@ -137,24 +142,49 @@ class ExternalCourseService:
 
         _discovery_executor.submit(_run)
 
-    def _build_resource_queries(self, weak_topics: list[str], max_queries: int | None = None) -> list[str]:
+    def _build_resource_queries(
+        self,
+        weak_topics: list[str],
+        max_queries: int | None = None,
+        stack_terms: list[str] | None = None,
+    ) -> list[str]:
         queries = []
         topics = weak_topics[:max_queries] if max_queries else weak_topics
+        stack_label = self.ranker.stack_display_names(stack_terms or [])[0] if stack_terms else ""
+        stack_clause = f'"{stack_label}" ' if stack_label else ""
         for topic in topics:
             topic_text = str(topic).strip()
             if not topic_text:
                 continue
             queries.extend([
-                f'site:coursera.org/learn "{topic_text}" course',
-                f'site:edx.org/learn "{topic_text}" course',
-                f'site:youtube.com/watch "{topic_text}" tutorial',
-                f'site:learn.microsoft.com "{topic_text}" tutorial',
-                f'site:developer.mozilla.org "{topic_text}" tutorial',
-                f'site:geeksforgeeks.org "{topic_text}" tutorial',
-                f'site:w3schools.com "{topic_text}" tutorial',
-                f'site:coursera.org/specializations "{topic_text}" course',
+                f'site:coursera.org/learn {stack_clause}"{topic_text}" course',
+                f'site:edx.org/learn {stack_clause}"{topic_text}" course',
+                f'site:youtube.com/watch {stack_clause}"{topic_text}" tutorial',
+                f'site:learn.microsoft.com {stack_clause}"{topic_text}" tutorial',
+                f'site:developer.mozilla.org {stack_clause}"{topic_text}" tutorial',
+                f'site:geeksforgeeks.org {stack_clause}"{topic_text}" tutorial',
+                f'site:w3schools.com {stack_clause}"{topic_text}" tutorial',
+                f'site:coursera.org/specializations {stack_clause}"{topic_text}" course',
             ])
         return queries
+
+    @staticmethod
+    def _clean_search_topics(topics: list[str], course_name: str = "") -> list[str]:
+        course_key = str(course_name or "").strip().lower()
+        clean_topics: list[str] = []
+        for topic in topics or []:
+            value = str(topic).strip()
+            if not value:
+                continue
+            if course_key and value.lower() == course_key:
+                continue
+            clean_topics.append(value)
+        return list(dict.fromkeys(clean_topics))
+
+    def _filter_resources_by_stack(self, resources: list[dict[str, Any]], stack_terms: list[str] | None) -> list[dict[str, Any]]:
+        if not stack_terms:
+            return resources
+        return self.ranker.filter_candidates_by_stack(resources, stack_terms)
 
     def _build_validated_candidate(self, query: str, item: dict) -> dict[str, Any] | None:
         raw_url = item.get("url")

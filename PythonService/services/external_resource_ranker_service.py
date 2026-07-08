@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from typing import Any
 
 from dotenv import load_dotenv
@@ -13,7 +14,61 @@ logger = logging.getLogger(__name__)
 
 
 class ExternalResourceRankerService:
-    MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+    MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3-32b")
+    RANKER_CANDIDATE_LIMIT = 15
+    MAX_DESCRIPTION_CHARS = 220
+    MAX_SEARCH_QUERY_CHARS = 80
+    RANKER_MAX_TOKENS = 1024
+    GENERIC_CONTEXT_TERMS = {
+        "web",
+        "веб",
+        "веб-разработка",
+        "programming",
+        "development",
+        "разработка",
+        "программирование",
+        "course",
+        "курс",
+        "tutorial",
+        "обучение",
+    }
+    STACK_ALIASES: dict[str, tuple[str, ...]] = {
+        "csharp": (
+            "c#",
+            "c sharp",
+            "c-sharp",
+            "csharp",
+            ".net",
+            "dotnet",
+            "asp.net",
+            "asp net",
+            "blazor",
+            "entity framework",
+        ),
+        "javascript": (
+            "javascript",
+            "java script",
+            "js",
+            "typescript",
+            "node.js",
+            "nodejs",
+            "react",
+            "vue",
+            "angular",
+        ),
+        "python": ("python", "django", "flask", "fastapi"),
+        "java": ("java", "spring", "spring boot"),
+        "cpp": ("c++", "cplusplus", "cpp"),
+        "sql": ("sql", "postgresql", "postgres", "mysql", "sqlite", "database", "базы данных", "бд"),
+    }
+    STACK_DISPLAY_NAMES: dict[str, str] = {
+        "csharp": "C#",
+        "javascript": "JavaScript",
+        "python": "Python",
+        "java": "Java",
+        "cpp": "C++",
+        "sql": "SQL",
+    }
 
     def __init__(self):
         api_key = os.getenv("GROQ_API_KEY")
@@ -35,33 +90,24 @@ class ExternalResourceRankerService:
         if not normalized_candidates:
             return []
 
-        payload = {
-            "courseName": course_name,
-            "weakTopics": weak_topics,
-            "improvementTopics": improvement_topics,
-            "courseTags": course_tags,
-            "resourceMix": "Prefer 1-2 articles, up to 2 courses, and optionally 1 video.",
-            "rules": [
-                "Treat courseName as a hard relevance constraint. Important technologies in courseName must match the selected resources.",
-                "Select only resources that directly help the course topics.",
-                "Do not select resources for a different programming language or unrelated technology stack.",
-                "Use only URLs from candidates. Never invent or rewrite URLs.",
-                "It is better to return fewer resources than irrelevant resources.",
-            ],
-            "candidates": [
-                {
-                    "url": item.get("Url"),
-                    "title": item.get("Title", ""),
-                    "description": item.get("Description", ""),
-                    "resourceType": item.get("ResourceType", "course"),
-                    "platform": item.get("Platform", "External"),
-                    "topics": item.get("Topics") or [],
-                    "searchQuery": item.get("SearchQuery", ""),
-                }
-                for item in normalized_candidates[:40]
-            ],
-            "maxResults": max_results,
-        }
+        explicit_stacks = self.extract_stack_terms([course_name, *(course_tags or []), *(weak_topics or []), *(improvement_topics or [])])
+        if explicit_stacks:
+            normalized_candidates = self.filter_candidates_by_stack(normalized_candidates, explicit_stacks)
+            if not normalized_candidates:
+                return []
+
+        context_terms = self._context_terms(course_name, weak_topics, improvement_topics, course_tags)
+        ranker_candidates = self._prefilter_candidates(normalized_candidates, context_terms, self.RANKER_CANDIDATE_LIMIT)
+
+        payload = self._build_ranker_payload(
+            course_name=course_name,
+            weak_topics=weak_topics,
+            improvement_topics=improvement_topics,
+            course_tags=course_tags,
+            candidates=ranker_candidates,
+            max_results=max_results,
+            explicit_stacks=explicit_stacks,
+        )
 
         try:
             response = self.client.chat.completions.create(
@@ -71,12 +117,12 @@ class ExternalResourceRankerService:
                     {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
                 ],
                 temperature=0.1,
-                max_tokens=2048,
+                max_tokens=self.RANKER_MAX_TOKENS,
                 response_format={"type": "json_object"},
             )
             parsed = json.loads(response.choices[0].message.content.strip())
-            course_terms = self._context_terms(course_name, [], [], course_tags)
-            return self._map_ranked_resources(parsed.get("resources", []), normalized_candidates, max_results, course_terms)
+            course_terms = [] if explicit_stacks else self._context_terms(course_name, [], [], course_tags)
+            return self._map_ranked_resources(parsed.get("resources", []), ranker_candidates, max_results, course_terms)
         except Exception as ex:
             logger.warning("Groq external ranker failed, using deterministic fallback: %s", ex)
             return self._fallback_rank(normalized_candidates, max_results, course_name, weak_topics, improvement_topics, course_tags)
@@ -90,6 +136,45 @@ Choose only from candidate URLs. Never create new URLs.
 Reject resources that are off-topic, too generic, or for the wrong technology stack.
 The courseName is a hard constraint: if it names a technology, selected resources must match that technology."""
 
+    def _build_ranker_payload(
+        self,
+        course_name: str,
+        weak_topics: list[str],
+        improvement_topics: list[str],
+        course_tags: list[str],
+        candidates: list[dict[str, Any]],
+        max_results: int,
+        explicit_stacks: list[str] | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "courseName": course_name,
+            "explicitStacks": [self.STACK_DISPLAY_NAMES.get(stack, stack) for stack in explicit_stacks or []],
+            "weakTopics": weak_topics[:8],
+            "improvementTopics": improvement_topics[:8],
+            "courseTags": course_tags[:8],
+            "resourceMix": "Prefer 1-2 articles, up to 2 courses, and optionally 1 video.",
+            "rules": [
+                "Treat explicitStacks as a hard relevance constraint.",
+                "Select only resources that directly help the course topics.",
+                "Do not select resources for a different programming language or unrelated technology stack.",
+                "Use only URLs from candidates. Never invent or rewrite URLs.",
+                "It is better to return fewer resources than irrelevant resources.",
+            ],
+            "candidates": [self._candidate_payload(item) for item in candidates[: self.RANKER_CANDIDATE_LIMIT]],
+            "maxResults": max_results,
+        }
+
+    def _candidate_payload(self, item: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "url": item.get("Url"),
+            "title": self._truncate(item.get("Title", ""), 180),
+            "description": self._truncate(item.get("Description", ""), self.MAX_DESCRIPTION_CHARS),
+            "resourceType": item.get("ResourceType", "course"),
+            "platform": item.get("Platform", "External"),
+            "topics": [self._truncate(topic, 40) for topic in (item.get("Topics") or [])[:6]],
+            "searchQuery": self._truncate(item.get("SearchQuery", ""), self.MAX_SEARCH_QUERY_CHARS),
+        }
+
     def _dedupe_candidates(self, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
         deduped: dict[str, dict[str, Any]] = {}
         for item in candidates:
@@ -102,6 +187,28 @@ The courseName is a hard constraint: if it names a technology, selected resource
             if not existing or float(candidate.get("ConfidenceScore") or candidate.get("RelevanceScore") or 0) > float(existing.get("ConfidenceScore") or existing.get("RelevanceScore") or 0):
                 deduped[normalized_url] = candidate
         return list(deduped.values())
+
+    @staticmethod
+    def _truncate(value: Any, max_chars: int) -> str:
+        text = str(value or "").strip()
+        return text[:max_chars]
+
+    def _prefilter_candidates(
+        self,
+        candidates: list[dict[str, Any]],
+        context_terms: list[str],
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        ranked = sorted(
+            candidates,
+            key=lambda item: (
+                self._context_score(item, context_terms),
+                float(item.get("ConfidenceScore") or item.get("RelevanceScore") or 0.0),
+                self._url_priority(item.get("Url")),
+            ),
+            reverse=True,
+        )
+        return ranked[:limit]
 
     def _map_ranked_resources(
         self,
@@ -146,9 +253,15 @@ The courseName is a hard constraint: if it names a technology, selected resource
         improvement_topics: list[str] | None = None,
         course_tags: list[str] | None = None,
     ) -> list[dict[str, Any]]:
+        explicit_stacks = self.extract_stack_terms([course_name, *(course_tags or []), *(weak_topics or []), *(improvement_topics or [])])
+        if explicit_stacks:
+            candidates = self.filter_candidates_by_stack(candidates, explicit_stacks)
+            if not candidates:
+                return []
+
         context_terms = self._context_terms(course_name, weak_topics or [], improvement_topics or [], course_tags or [])
         course_terms = self._context_terms(course_name, [], [], course_tags or [])
-        if course_terms and any(self._context_score(item, course_terms) > 0 for item in candidates):
+        if not explicit_stacks and course_terms and any(self._context_score(item, course_terms) > 0 for item in candidates):
             candidates = [item for item in candidates if self._context_score(item, course_terms) > 0]
         ranked = sorted(
             candidates,
@@ -179,16 +292,25 @@ The courseName is a hard constraint: if it names a technology, selected resource
             for token in lowered.replace("+", " ").replace("-", " ").replace(":", " ").split():
                 if len(token) < 2:
                     continue
+                if ExternalResourceRankerService._is_generic_context_term(token):
+                    continue
                 if high_precision and not ExternalResourceRankerService._is_precise_context_token(token):
                     continue
                 expanded.append(token)
             for term in expanded:
+                if ExternalResourceRankerService._is_generic_context_term(term):
+                    continue
                 terms.extend([term] * weight)
         return terms
 
     @staticmethod
     def _is_precise_context_token(token: str) -> bool:
         return len(token) <= 4 or any(char.isdigit() or char in "#+." for char in token) or any("a" <= char <= "z" for char in token)
+
+    @staticmethod
+    def _is_generic_context_term(term: str) -> bool:
+        normalized = term.strip().lower()
+        return normalized in ExternalResourceRankerService.GENERIC_CONTEXT_TERMS
 
     @staticmethod
     def _context_score(item: dict[str, Any], terms: list[str]) -> float:
@@ -198,6 +320,60 @@ The courseName is a hard constraint: if it names a technology, selected resource
             str(item.get("Url", "")),
         ]).lower()
         return sum(1.0 for term in terms if term and term in text)
+
+    @classmethod
+    def extract_stack_terms(cls, values: list[Any] | tuple[Any, ...] | None) -> list[str]:
+        text = " ".join(str(value or "") for value in values or []).lower()
+        stacks: list[str] = []
+        for stack, aliases in cls.STACK_ALIASES.items():
+            if any(cls._contains_alias(text, alias) for alias in aliases):
+                stacks.append(stack)
+        return stacks
+
+    @classmethod
+    def stack_display_names(cls, stacks: list[str]) -> list[str]:
+        return [cls.STACK_DISPLAY_NAMES.get(stack, stack) for stack in stacks]
+
+    @classmethod
+    def filter_candidates_by_stack(cls, candidates: list[dict[str, Any]], stacks: list[str]) -> list[dict[str, Any]]:
+        if not stacks:
+            return candidates
+        return [candidate for candidate in candidates if cls.resource_matches_stack(candidate, stacks)]
+
+    @classmethod
+    def resource_matches_stack(cls, item: dict[str, Any], stacks: list[str]) -> bool:
+        if not stacks:
+            return True
+        text = cls._resource_stack_text(item)
+        return any(any(cls._contains_alias(text, alias) for alias in cls.STACK_ALIASES.get(stack, ())) for stack in stacks)
+
+    @staticmethod
+    def _resource_stack_text(item: dict[str, Any]) -> str:
+        return " ".join([
+            str(item.get("Title", "")),
+            str(item.get("Description", "")),
+            str(item.get("Url", "")),
+            str(item.get("Platform", "")),
+        ]).lower()
+
+    @staticmethod
+    def _contains_alias(text: str, alias: str) -> bool:
+        normalized_text = text.lower()
+        normalized_alias = alias.lower()
+
+        if normalized_alias == "java":
+            return re.search(r"(?<![a-z0-9])java(?![a-z0-9])", normalized_text) is not None
+        if normalized_alias == "js":
+            return re.search(r"(?<![a-z0-9])js(?![a-z0-9])", normalized_text) is not None
+        if normalized_alias == "c#":
+            return re.search(r"(?<![a-z0-9])c#(?![a-z0-9])", normalized_text) is not None
+        if normalized_alias == "c++":
+            return re.search(r"(?<![a-z0-9])c\+\+(?![a-z0-9])", normalized_text) is not None
+        if normalized_alias == ".net":
+            return re.search(r"(?<![a-z0-9])\.net(?![a-z0-9])", normalized_text) is not None
+
+        escaped = re.escape(normalized_alias)
+        return re.search(rf"(?<![a-z0-9]){escaped}(?![a-z0-9])", normalized_text) is not None
 
     def _apply_resource_mix(self, candidates: list[dict[str, Any]], max_results: int) -> list[dict[str, Any]]:
         selected: list[dict[str, Any]] = []
